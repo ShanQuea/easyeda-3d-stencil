@@ -1,0 +1,59 @@
+{
+	"name": "easyeda-3d-stencil",
+	"type": "module",
+	"version": "1.0.0",
+	"private": true,
+	"description": "3D-printable solder paste stencil generator for EasyEDA Pro / 嘉立创EDA专业版",
+	"author": "ShanQuea",
+	"license": "Apache-2.0",
+	"homepage": "https://github.com/ShanQuea/easyeda-3d-stencil",
+	"engines": {
+		"node": ">=20.17.0"
+	},
+	"scripts": {
+		"build": "npm run compile && ts-node ./build/packaged.ts",
+		"compile": "rimraf ./dist/ && npm run build:app && ts-node ./config/esbuild.prod.ts",
+		"build:app": "tsx ./scripts/build-app.ts",
+		"debug": "ts-node ./build/dev.ts",
+		"test": "vitest run",
+		"typecheck": "tsc --noEmit",
+		"lint": "eslint",
+		"fix": "eslint --fix",
+		"screenshots": "tsx ./scripts/screenshots.ts",
+		"update:check": "ts-node ./build/update.ts check",
+		"update": "ts-node ./build/update.ts update && npm install",
+		"manifest:generate": "npm install && ts-node ./build/manifest.ts generate",
+		"manifest:bump": "npm install && ts-node ./build/manifest.ts bump && npm install"
+	},
+	"dependencies": {
+		"cdt2d": "^1.0.0",
+		"clipper-lib": "^6.4.2",
+		"jszip": "^3.10.2"
+	},
+	"devDependencies": {
+		"@antfu/eslint-config": "^5.4.1",
+		"@jlceda/pro-api-types": "^0.4.26",
+		"@types/clipper-lib": "^6.4.0",
+		"@types/fs-extra": "^11.0.4",
+		"@types/ws": "^8.5.13",
+		"esbuild": "^0.24.2",
+		"eslint": "^9.37.0",
+		"fs-extra": "^11.3.0",
+		"ignore": "^7.0.3",
+		"lint-staged": "^16.2.3",
+		"playwright-core": "^1.65.1",
+		"rimraf": "^6.0.1",
+		"simple-git-hooks": "^2.13.1",
+		"ts-node": "^10.9.2",
+		"tsx": "^4.23.15",
+		"typescript": "^5.7.3",
+		"vitest": "^3.2.7",
+		"ws": "^8.18.0"
+	},
+	"simple-git-hooks": {
+		"pre-commit": "npx lint-staged"
+	},
+	"lint-staged": {
+		"*": "eslint --fix"
+	}
+}

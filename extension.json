@@ -1,0 +1,52 @@
+{
+	"name": "easyeda-3d-stencil",
+	"uuid": "b983b764dfd24542a5f9455612dfc17a",
+	"displayName": "3D 打印钢网 / 3D Printed Stencil",
+	"description": "一键把当前 PCB 变成可以直接 FDM 打印的锡膏钢网，带卡板定位围框，导出 STL / 3MF。Generate a 3D-printable solder paste stencil with an alignment frame straight from your PCB.",
+	"version": "1.0.0",
+	"publisher": "ShanQuea",
+	"engines": {
+		"eda": "^3.2.0"
+	},
+	"license": "Apache-2.0",
+	"repository": {
+		"type": "github",
+		"url": "https://github.com/ShanQuea/easyeda-3d-stencil"
+	},
+	"categories": "PCB",
+	"keywords": [
+		"Stencil",
+		"3D Print",
+		"Solder Paste",
+		"STL",
+		"钢网"
+	],
+	"images": {
+		"logo": "./images/logo.png"
+	},
+	"homepage": "https://github.com/ShanQuea/easyeda-3d-stencil",
+	"bugs": "https://github.com/ShanQuea/easyeda-3d-stencil/issues",
+	"activationEvents": {},
+	"entry": "./dist/index",
+	"dependentExtensions": {},
+	"headerMenus": {
+		"pcb": [
+			{
+				"id": "stencil3d",
+				"title": "3D Stencil",
+				"menuItems": [
+					{
+						"id": "stencil3d-open",
+						"title": "Generate 3D Printed Stencil...",
+						"registerFn": "openStencil"
+					},
+					{
+						"id": "stencil3d-about",
+						"title": "About...",
+						"registerFn": "about"
+					}
+				]
+			}
+		]
+	}
+}

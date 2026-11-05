@@ -1,0 +1,5 @@
+easyeda-3d-stencil
+Copyright 2026 ShanQuea
+
+The build scaffolding under build/ and config/ comes from easyeda-api-sdk
+(https://github.com/easyeda/easyeda-api-sdk), Copyright JLCEDA, Apache-2.0.

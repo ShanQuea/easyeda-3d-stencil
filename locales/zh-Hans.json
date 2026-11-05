@@ -1,0 +1,4 @@
+{
+	"3D Printed Stencil": "3D 打印钢网",
+	"About text": "3D 打印钢网 v${1}\n把当前 PCB 一键变成能直接 FDM 打印的锡膏钢网。\n${2}"
+}
