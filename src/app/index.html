@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="zh-Hans">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>3D Stencil</title>
+		<style>/*__CSS__*/</style>
+	</head>
+	<body>
+		<aside class="panel">
+			<header class="brand">
+				<svg class="logo" viewBox="0 0 32 32" aria-hidden="true">
+					<rect x="2" y="6" width="28" height="20" rx="3" fill="none" stroke="currentColor" stroke-width="2" />
+					<rect x="7" y="11" width="4" height="3" rx="0.5" fill="currentColor" />
+					<rect x="14" y="11" width="4" height="3" rx="0.5" fill="currentColor" />
+					<rect x="21" y="11" width="4" height="3" rx="0.5" fill="currentColor" />
+					<rect x="7" y="18" width="2" height="4" rx="0.5" fill="currentColor" />
+					<rect x="11" y="18" width="2" height="4" rx="0.5" fill="currentColor" />
+					<rect x="15" y="18" width="2" height="4" rx="0.5" fill="currentColor" />
+					<rect x="19" y="18" width="2" height="4" rx="0.5" fill="currentColor" />
+					<rect x="23" y="18" width="2" height="4" rx="0.5" fill="currentColor" />
+				</svg>
+				<div class="brand-text">
+					<h1 data-i18n="title"></h1>
+					<p data-i18n="subtitle"></p>
+				</div>
+				<button id="lang" class="ghost" type="button">EN</button>
+			</header>
+
+			<div class="scroll">
+				<section>
+					<h2 data-i18n="source"></h2>
+					<div class="row buttons">
+						<button id="load-eda" class="primary" type="button" hidden data-i18n="source.eda"></button>
+						<button id="load-file" type="button" data-i18n="source.file"></button>
+						<button id="load-demo" type="button" data-i18n="source.demo"></button>
+						<input id="file-input" type="file" multiple hidden />
+					</div>
+					<p id="source-name" class="muted"></p>
+				</section>
+
+				<section>
+					<h2 data-i18n="printer"></h2>
+					<div class="field">
+						<label data-i18n="nozzle"></label>
+						<div class="segmented" data-param="nozzle">
+							<button type="button" data-value="0.2">0.2</button>
+							<button type="button" data-value="0.25">0.25</button>
+							<button type="button" data-value="0.4">0.4</button>
+							<button type="button" data-value="0.6">0.6</button>
+						</div>
+					</div>
+					<p id="nozzle-hint" class="muted"></p>
+					<button id="nozzle-reset" class="link" type="button" hidden data-i18n="nozzle.reset"></button>
+				</section>
+
+				<section>
+					<h2 data-i18n="stencil"></h2>
+					<div class="field">
+						<label data-i18n="side"></label>
+						<div class="segmented" data-param="side">
+							<button type="button" data-value="top" data-i18n="side.top"></button>
+							<button type="button" data-value="bottom" data-i18n="side.bottom"></button>
+						</div>
+					</div>
+					<div class="field" data-i18n-title="thickness.tip">
+						<label data-i18n="thickness"></label>
+						<span class="num"><input type="number" data-param="thickness" min="0.08" max="1" step="0.02" /><i>mm</i></span>
+					</div>
+					<div class="field" data-i18n-title="compensation.tip">
+						<label data-i18n="compensation"></label>
+						<span class="num"><input type="number" data-param="compensation" min="-0.3" max="0.3" step="0.01" /><i>mm</i></span>
+					</div>
+					<label class="check" data-i18n-title="keepWebs.tip">
+						<input type="checkbox" data-param="keepWebs" /><span data-i18n="keepWebs"></span>
+					</label>
+				</section>
+
+				<section>
+					<h2 data-i18n="frame"></h2>
+					<div class="field">
+						<label data-i18n="frame.mode"></label>
+						<div class="segmented" data-param="frameMode">
+							<button type="button" data-value="full" data-i18n="frame.full"></button>
+							<button type="button" data-value="corners" data-i18n="frame.corners"></button>
+							<button type="button" data-value="none" data-i18n="frame.none"></button>
+						</div>
+					</div>
+					<div class="field" data-when="frameMode=full,corners">
+						<label data-i18n="boardThickness"></label>
+						<span class="num"><input type="number" data-param="boardThickness" min="0.2" max="6" step="0.1" /><i>mm</i></span>
+					</div>
+					<p id="thickness-note" class="muted" hidden></p>
+					<div class="field" data-when="frameMode=full,corners" data-i18n-title="clearance.tip">
+						<label data-i18n="clearance"></label>
+						<span class="num"><input type="number" data-param="clearance" min="0" max="1" step="0.05" /><i>mm</i></span>
+					</div>
+					<div class="field">
+						<label id="frame-width-label" data-i18n="frameWidth"></label>
+						<span class="num"><input type="number" data-param="frameWidth" min="1" max="30" step="0.5" /><i>mm</i></span>
+					</div>
+					<div class="field" data-when="frameMode=full,corners" data-i18n-title="frameDrop.tip">
+						<label data-i18n="frameDrop"></label>
+						<span class="num"><input type="number" data-param="frameDrop" min="0" max="2" step="0.1" /><i>mm</i></span>
+					</div>
+					<div class="field" data-when="frameMode=corners">
+						<label data-i18n="cornerLength"></label>
+						<span class="num"><input type="number" data-param="cornerLength" min="3" max="60" step="1" /><i>mm</i></span>
+					</div>
+					<label class="check" data-when="frameMode=full">
+						<input type="checkbox" data-param="notches" /><span data-i18n="notches"></span>
+					</label>
+					<label class="check" data-when="frameMode=full,corners" data-i18n-title="cornerRelief.tip">
+						<input type="checkbox" data-param="cornerRelief" /><span data-i18n="cornerRelief"></span>
+					</label>
+				</section>
+
+				<section>
+					<h2 data-i18n="check"></h2>
+					<ul id="checks" class="checks"></ul>
+				</section>
+
+				<section>
+					<h2 data-i18n="tips"></h2>
+					<p class="muted" data-i18n="tips.body"></p>
+				</section>
+			</div>
+
+			<footer class="export">
+				<button id="export-stl" class="primary" type="button" data-i18n="export.stl" disabled></button>
+				<button id="export-3mf" type="button" data-i18n="export.3mf" disabled></button>
+			</footer>
+		</aside>
+
+		<main class="stage">
+			<canvas id="gl"></canvas>
+			<canvas id="overlay"></canvas>
+			<div class="toolbar">
+				<div class="segmented" id="view-mode">
+					<button type="button" data-value="print" data-i18n="view.print"></button>
+					<button type="button" data-value="assembled" data-i18n="view.assembled"></button>
+				</div>
+				<button id="view-issues" class="chip on" type="button" data-i18n="view.issues"></button>
+				<button id="view-reset" class="chip" type="button" data-i18n="view.reset"></button>
+			</div>
+			<dl id="stats" class="stats"></dl>
+			<div id="drop" class="drop">
+				<p data-i18n="source.drop"></p>
+			</div>
+			<div id="busy" class="busy" hidden><span></span><b id="busy-text"></b></div>
+			<div id="toast" class="toast" hidden></div>
+		</main>
+
+		<script>/*__JS__*/</script>
+	</body>
+</html>
