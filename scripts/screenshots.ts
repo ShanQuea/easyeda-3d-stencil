@@ -1,4 +1,4 @@
-// 用本机的 Edge/Chrome 给 README 截图，顺带把 logo 渲染成 png。先跑 npm run build:app
+// 用本机的 Edge/Chrome 给 README 截图。先跑 npm run build:app
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import fs from 'fs-extra';
@@ -20,15 +20,6 @@ const SHOTS = [
 	{ file: 'check-nozzle-02.png', query: '?lang=zh&nozzle=0.2', yaw: -1.5708, pitch: 1.25, zoom: 2.3, stage: true },
 ];
 
-const LOGO = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500">
-<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1c2330"/><stop offset="1" stop-color="#0f1319"/></linearGradient></defs>
-<rect width="500" height="500" rx="96" fill="url(#g)"/>
-<rect x="70" y="120" width="360" height="260" rx="34" fill="none" stroke="#4c9dff" stroke-width="26"/>
-<g fill="#e6e9ee">
-<rect x="130" y="180" width="58" height="42" rx="7"/><rect x="221" y="180" width="58" height="42" rx="7"/><rect x="312" y="180" width="58" height="42" rx="7"/>
-<rect x="130" y="262" width="26" height="62" rx="6"/><rect x="183" y="262" width="26" height="62" rx="6"/><rect x="237" y="262" width="26" height="62" rx="6"/><rect x="290" y="262" width="26" height="62" rx="6"/><rect x="344" y="262" width="26" height="62" rx="6"/>
-</g></svg>`;
-
 async function main(): Promise<void> {
 	await fs.ensureDir(docs);
 	const browser = await chromium.launch({ channel: 'msedge' }).catch(() => chromium.launch({ channel: 'chrome' }));
@@ -45,10 +36,6 @@ async function main(): Promise<void> {
 		console.log(shot.file);
 	}
 
-	const logo = await browser.newPage({ viewport: { width: 500, height: 500 } });
-	await logo.setContent(`<body style="margin:0;background:transparent">${LOGO}</body>`);
-	await logo.screenshot({ path: path.join(root, 'images/logo.png'), omitBackground: true });
-	await fs.writeFile(path.join(docs, 'logo.svg'), LOGO);
 	await browser.close();
 }
 

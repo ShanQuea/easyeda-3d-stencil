@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/logo.svg" width="88" alt="logo" />
+  <img src="docs/logo.png" width="96" alt="logo" />
 </p>
 
 <h1 align="center">EasyEDA 3D Stencil</h1>
@@ -25,7 +25,10 @@ Dabbing paste onto a prototype board with a syringe gets old fast, and ordering 
 
 1. Download the `.eext` from [Releases](https://github.com/ShanQuea/easyeda-3d-stencil/releases)
 2. In EasyEDA Pro: Settings → Extensions → Extension Manager → Import
-3. Open a PCB and choose 3D Stencil → Generate 3D Printed Stencil
+3. Select the extension in the manager, open the Configure tab and tick "Show in top menu". Otherwise the menu lives under Advanced
+4. Open a PCB and choose 3D Stencil → Generate 3D Printed Stencil
+
+Developed and tested on EasyEDA Pro V4.1.100. The manifest allows V3.2 and later, but older versions have not been tested. Issues welcome.
 
 Not on EasyEDA? The [web version](https://shanquea.github.io/easyeda-3d-stencil/?lang=en) takes a Gerber zip from KiCad, Altium etc. It needs a paste layer and an outline layer.
 

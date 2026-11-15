@@ -21,7 +21,6 @@ debug.log
 /docs/
 /.github/
 /.sdk-manifest.json
-/CHANGELOG.md
 /README.en.md
 /vitest.config.ts
 *.tsbuildinfo

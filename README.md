@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/logo.svg" width="88" alt="logo" />
+  <img src="https://raw.githubusercontent.com/ShanQuea/easyeda-3d-stencil/main/docs/logo.png" width="96" alt="logo" />
 </p>
 
 <h1 align="center">EasyEDA 3D Stencil</h1>
@@ -14,10 +14,10 @@
 <p align="center">
   <a href="https://shanquea.github.io/easyeda-3d-stencil/">在线试用</a> ·
   <a href="https://github.com/ShanQuea/easyeda-3d-stencil/releases">下载</a> ·
-  <a href="README.en.md">English</a>
+  <a href="https://github.com/ShanQuea/easyeda-3d-stencil/blob/main/README.en.md">English</a>
 </p>
 
-![screenshot](docs/screenshot-zh.png)
+![screenshot](https://raw.githubusercontent.com/ShanQuea/easyeda-3d-stencil/main/docs/screenshot-zh.png)
 
 打样板子回来，贴片件多的时候拿针筒点锡膏很折腾，单独开钢网又要等又要钱。桌上反正有台 3D 打印机，就写了这个：打一张薄片当钢网，四周带一圈框把板子卡住，不用对位。
 
@@ -25,7 +25,10 @@
 
 1. 在 [Releases](https://github.com/ShanQuea/easyeda-3d-stencil/releases) 下载 `.eext`
 2. 嘉立创EDA 里 设置 → 扩展 → 扩展管理器 → 导入扩展
-3. 打开 PCB，顶部菜单 3D 钢网 → 生成 3D 打印钢网
+3. 在扩展管理器里点开这个扩展，切到「配置」，勾上「显示在顶部菜单」。不勾的话菜单在「高级」里
+4. 打开 PCB，顶部菜单 3D 钢网 → 生成 3D 打印钢网
+
+开发和实测用的是嘉立创EDA 专业版 V4.1.100。扩展声明支持 V3.2 及以上，但老版本没有实际测过，遇到问题欢迎提 issue。
 
 不用嘉立创EDA 的话，[网页版](https://shanquea.github.io/easyeda-3d-stencil/) 可以直接拖 Gerber 压缩包进去（KiCad、Altium 导出的都行，要有锡膏层和板框层）。
 
@@ -40,13 +43,13 @@
 
 | 全围 | 四角 | 无围框 |
 | :---: | :---: | :---: |
-| ![full](docs/frame-full.png) | ![corners](docs/frame-corners.png) | ![none](docs/frame-none.png) |
+| ![full](https://raw.githubusercontent.com/ShanQuea/easyeda-3d-stencil/main/docs/frame-full.png) | ![corners](https://raw.githubusercontent.com/ShanQuea/easyeda-3d-stencil/main/docs/frame-corners.png) | ![none](https://raw.githubusercontent.com/ShanQuea/easyeda-3d-stencil/main/docs/frame-none.png) |
 
 同一块板，0.4 喷嘴下 0.5mm 脚距的 QFP 全红，换 0.2 就没问题：
 
 | 0.4 | 0.2 |
 | :---: | :---: |
-| ![0.4](docs/check-nozzle-04.png) | ![0.2](docs/check-nozzle-02.png) |
+| ![0.4](https://raw.githubusercontent.com/ShanQuea/easyeda-3d-stencil/main/docs/check-nozzle-04.png) | ![0.2](https://raw.githubusercontent.com/ShanQuea/easyeda-3d-stencil/main/docs/check-nozzle-02.png) |
 
 ## 能打多细
 
@@ -102,4 +105,4 @@ npm run screenshots # 重新生成截图
 
 ## License
 
-[Apache-2.0](LICENSE)
+[Apache-2.0](https://github.com/ShanQuea/easyeda-3d-stencil/blob/main/LICENSE)
