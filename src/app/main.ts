@@ -4,7 +4,8 @@ import type { Key, Lang } from './i18n';
 import type { Marker, SceneItem } from './viewer';
 import { applyNozzle, buildMesh, DEFAULT_PARAMS, generateStencil, loadBoard, nozzlePreset, to3mf, toStl } from '../core';
 import { demoGerbers } from '../core/demo';
-import { hostLanguage, inEda, readBoardThickness, readFiles, readFromEda, saveFile } from './host';
+import { DOCK_MAX } from '../window';
+import { dockWindow, hostLanguage, inEda, readBoardThickness, readFiles, readFromEda, saveFile } from './host';
 import { getLang, setLang, t } from './i18n';
 import { flipOnto, Viewer } from './viewer';
 
@@ -309,9 +310,6 @@ function renderChecks(): void {
 	if (clean) {
 		add('ok', t('check.ok'));
 	}
-	if (model.mirrored) {
-		add('info', t('check.mirrored'));
-	}
 }
 
 function useBoard(loaded: LoadedBoard): void {
@@ -393,6 +391,14 @@ function bindStage(): void {
 		}
 	});
 	$('#view-reset').addEventListener('click', () => viewer?.resetCamera());
+	$('#view-top').addEventListener('click', () => {
+		if (viewMode !== 'assembled') {
+			viewMode = 'assembled';
+			syncControls();
+			renderScene(false);
+		}
+		viewer?.setAngles(-Math.PI / 2, Math.PI / 2 - 0.001);
+	});
 	$('#view-issues').addEventListener('click', (e) => {
 		if (viewer) {
 			viewer.showMarkers = !viewer.showMarkers;
@@ -481,6 +487,10 @@ async function main(): Promise<void> {
 	}
 	syncControls();
 	if (inEda) {
+		// 入口没拿到视口大小时开的是默认窗口，这里挪到右边，新窗口会重新加载
+		if (window.innerWidth > DOCK_MAX && await dockWindow(t('title'))) {
+			return;
+		}
 		$('#load-eda').hidden = false;
 		$('#load-demo').hidden = true;
 		await loadFromEda();

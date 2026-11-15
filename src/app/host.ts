@@ -2,6 +2,7 @@
 import type { GerberSources, LayerRole } from '../core';
 import JSZip from 'jszip';
 import { pickLayers } from '../core';
+import { dockRect, PAGE, WINDOW_IDS, windowProps } from '../window';
 
 // iframe 里 eda 是直接挂在全局上的
 export const inEda = typeof (globalThis as { eda?: unknown }).eda !== 'undefined';
@@ -135,4 +136,33 @@ export async function saveFile(data: ArrayBuffer, fileName: string, mime: string
 	a.click();
 	a.remove();
 	setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// 对话框不能拖边改大小，只能按新尺寸重开一个再关掉旧的，两个 ID 轮换着用
+export async function dockWindow(title: string): Promise<boolean> {
+	let current = WINDOW_IDS[0];
+	for (const id of WINDOW_IDS) {
+		if (await eda.sys_IFrame.isIFrameAlreadyExist(id)) {
+			current = id;
+		}
+	}
+	const next = WINDOW_IDS.find(id => id !== current)!;
+	let vw = screen.availWidth;
+	let vh = screen.availHeight;
+	try {
+		vw = window.top!.innerWidth;
+		vh = window.top!.innerHeight;
+	}
+	catch {
+		// 跨域拿不到就按屏幕算
+	}
+	const r = dockRect(vw, vh);
+	try {
+		if (await eda.sys_IFrame.openIFrame(PAGE, r.width, r.height, next, { ...windowProps(title), x: r.x, y: r.y })) {
+			await eda.sys_IFrame.closeIFrame(current);
+			return true;
+		}
+	}
+	catch {}
+	return false;
 }
