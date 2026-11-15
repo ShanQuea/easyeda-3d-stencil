@@ -142,11 +142,19 @@ function widenWebs(apertures: Paths, minWeb: number): { apertures: Paths; fix: W
 	// 闭运算（先扩后缩）会把窄于 minWeb 的缝填上，多出来的部分就是那些筋
 	const closed = offset(offset(apertures, minWeb / 2, 'miter'), -minWeb / 2, 'miter');
 	const webs = difference(closed, apertures);
+	const parts = islands(apertures).map((island) => {
+		const paths = [island.outer, ...island.holes];
+		return { paths, box: bounds(paths)! };
+	});
 	const cuts: Paths = [];
 	let maxShrink = 0;
 	for (const web of webs) {
 		const a = pathArea(web);
 		if (a < minWeb * minWeb * 0.05) {
+			continue;
+		}
+		// 单个焊盘自己的缺口（防立碑开窗那种 U 形、H 形）也会被闭运算填上，那不是筋，不能削
+		if (!betweenApertures(web, parts)) {
 			continue;
 		}
 		// 筋基本是细长条，用面积和周长反推它的宽度
@@ -181,6 +189,25 @@ function widenWebs(apertures: Paths, minWeb: number): { apertures: Paths; fix: W
 		}
 	}
 	return { apertures: result, fix: { count, maxShrink: count ? maxShrink : 0 } };
+}
+
+function betweenApertures(web: Paths[number], parts: Array<{ paths: Paths; box: Bounds }>): boolean {
+	const grown = offset([web], 0.01, 'miter');
+	const box = bounds(grown);
+	if (!box) {
+		return false;
+	}
+	let hits = 0;
+	for (const part of parts) {
+		const b = part.box;
+		if (b.maxX < box.minX || b.minX > box.maxX || b.maxY < box.minY || b.minY > box.maxY) {
+			continue;
+		}
+		if (intersection(grown, part.paths).length && ++hits >= 2) {
+			return true;
+		}
+	}
+	return false;
 }
 
 function perimeter(path: Paths[number]): number {

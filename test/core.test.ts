@@ -9,6 +9,7 @@ import {
 	chainLoops,
 	DEFAULT_PARAMS,
 	detectLayer,
+	difference,
 	evaluateExpression,
 	extractOutline,
 	flattenImage,
@@ -257,6 +258,14 @@ describe('web keeping', () => {
 		const model = buildStencil(boardOutline, pads, { ...base, nozzle: 0.4, keepWebs: true });
 		expect(model.webFix.count).toBe(0);
 		expect(area(model.apertures)).toBeCloseTo(0.6, 3);
+	});
+
+	it('ignores the notch inside a single pad', () => {
+		// 1×1 的焊盘中间开一条 0.15 宽的缺口，像嘉立创的防立碑开窗
+		const notched = difference([rect(0, 0, 1000, 1000)], [rect(0, 300, 150, 600)]);
+		const model = buildStencil(boardOutline, notched, { ...base, keepWebs: true });
+		expect(model.webFix.count).toBe(0);
+		expect(area(model.apertures)).toBeCloseTo(area(notched), 3);
 	});
 
 	it('leaves things alone when off or when the web is already wide enough', () => {
