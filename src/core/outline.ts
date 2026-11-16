@@ -18,11 +18,22 @@ const MIN_LOOP_AREA = 0.5;
 export function extractOutline(image: GerberImage, fallback: Paths = []): BoardOutline {
 	const segments = image.tracks.filter(t => t.dark && t.points.length >= 2).map(t => t.points);
 
+	// 自闭合的小圆在最小容差下就成环了，外框却可能差一点点没接上，所以要等所有线段都串上才停
+	let best: Paths = [];
+	let bestArea = 0;
 	for (const snap of SNAP_LEVELS) {
-		const loops = chainLoops(segments, snap);
-		if (loops.length) {
+		const { loops, open } = chain(segments, snap);
+		if (loops.length && !open) {
 			return finish(loops, 'chained');
 		}
+		const area = loops.reduce((sum, loop) => sum + Math.abs(pathArea(loop)), 0);
+		if (area > bestArea) {
+			best = loops;
+			bestArea = area;
+		}
+	}
+	if (best.length) {
+		return finish(best, 'chained');
 	}
 
 	const flat = flattenImage(image);
@@ -74,6 +85,11 @@ function finish(loops: Paths, method: OutlineMethod): BoardOutline {
 
 // 有分叉或断头的链直接放弃，只要干净闭合的环
 export function chainLoops(polylines: Paths, snap: number): Paths {
+	return chain(polylines, snap).loops;
+}
+
+// open 是没能串进闭环的线段数
+function chain(polylines: Paths, snap: number): { loops: Paths; open: number } {
 	const cell = Math.max(1, snap);
 	const grid = new Map<string, number[]>();
 	const nodePoints: Array<{ X: number; Y: number }> = [];
@@ -132,16 +148,19 @@ export function chainLoops(polylines: Paths, snap: number): Paths {
 		}
 	}
 
+	let open = 0;
 	for (const start of edges) {
 		if (start.used) {
 			continue;
 		}
 		const loop: Path = [];
+		let count = 0;
 		let edge: Edge | undefined = start;
 		let node = start.a;
 		let closed = false;
 		while (edge && !edge.used) {
 			edge.used = true;
+			count++;
 			const forward = edge.a === node;
 			const points = forward ? edge.points : edge.points.slice().reverse();
 			// 每段的终点留给下一段的起点
@@ -160,6 +179,9 @@ export function chainLoops(polylines: Paths, snap: number): Paths {
 		if (closed && loop.length >= 3) {
 			loops.push(loop);
 		}
+		else {
+			open += count;
+		}
 	}
-	return loops;
+	return { loops, open };
 }

@@ -115,6 +115,13 @@ describe('board outline', () => {
 		expect(area(nested.board)).toBeCloseTo(400, 1);
 		expect(nested.cutouts).toHaveLength(1);
 
+		// 标准版转过来的板框会有 0.02mm 的缝，里面的圆孔先成环也不能把外框挤掉
+		const gap = extractOutline(parseGerber(`${HEAD}%ADD10C,0.25*%D10*X0Y0D02*X2000000Y0D01*X2000000Y0D02*X2000000Y1000000D01*`
+			+ `X2000000Y1000000D02*X2000Y1000000D01*X0Y1000000D02*X0Y0D01*G75*X300000Y500000D02*G03X300000Y500000I50000J0D01*M02*`));
+		expect(gap.method).toBe('chained');
+		expect(area(gap.board)).toBeCloseTo(200, 0);
+		expect(gap.cutouts).toHaveLength(1);
+
 		// 缺一条边：串不成环，退回包围盒
 		const open = extractOutline(parseGerber(`${HEAD}%ADD10C,0.1*%D10*X0Y0D02*X1000000Y0D01*X1000000Y500000D01*X0Y500000D01*M02*`));
 		expect(open.method).toBe('bbox');
