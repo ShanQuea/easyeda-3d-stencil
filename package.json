@@ -1,7 +1,7 @@
 {
 	"name": "easyeda-3d-stencil",
 	"type": "module",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"private": true,
 	"description": "3D-printable solder paste stencil generator for EasyEDA Pro / 嘉立创EDA专业版",
 	"author": "ShanQuea",
