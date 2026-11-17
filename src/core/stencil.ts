@@ -3,7 +3,7 @@
 // 所以顶层要左右镜像；底层不用，Gerber 底层本来就是从顶面透视看的
 import type { Bounds, Paths } from './geom';
 import type { Strip } from './strips';
-import { area, bounds, circle, clean, difference, intersection, islands, mirrorX, offset, pathArea, rect, SCALE, toUnits, translate, union } from './geom';
+import { bounds, circle, clean, difference, intersection, islands, mirrorX, offset, pathArea, rect, SCALE, toUnits, translate, union } from './geom';
 import { mergeFineRows } from './strips';
 
 export type FrameMode = 'full' | 'corners' | 'none';
@@ -151,87 +151,85 @@ export function buildStencil(board: Paths, paste: Paths, params: StencilParams):
 }
 
 // 相邻两个孔之间的筋窄于 minWeb 时，把筋两侧的孔各削掉一半差值，让筋刚好够一条线宽。
-// 比如筋 0.15、喷嘴 0.2，两边各缩 0.025
+// 比如筋 0.15、喷嘴 0.2，两边各缩 0.025。
+// 直接按每一对孔的真实间距算，不去猜筋的形状：圆角焊盘一整排的缝会连成一片，那样估出来的宽度不靠谱
 function widenWebs(apertures: Paths, minWeb: number): { apertures: Paths; fix: WebFix } {
-	// 闭运算（先扩后缩）会把窄于 minWeb 的缝填上，多出来的部分就是那些筋
-	const closed = offset(offset(apertures, minWeb / 2, 'miter'), -minWeb / 2, 'miter');
-	const webs = difference(closed, apertures);
+	const reach = toUnits(minWeb);
 	const parts = islands(apertures).map((island) => {
 		const paths = [island.outer, ...island.holes];
-		return { paths, box: bounds(paths)! };
+		return { paths, box: bounds(paths)!, cuts: [] as Paths };
 	});
-	const cuts: Paths = [];
+	const pairs: Array<[number, number]> = [];
 	let maxShrink = 0;
-	for (const web of webs) {
-		const a = pathArea(web);
-		if (a < minWeb * minWeb * 0.05) {
-			continue;
+	for (let i = 0; i < parts.length; i++) {
+		const a = parts[i];
+		for (let j = i + 1; j < parts.length; j++) {
+			const b = parts[j];
+			if (b.box.minX - a.box.maxX >= reach || a.box.minX - b.box.maxX >= reach || b.box.minY - a.box.maxY >= reach || a.box.minY - b.box.maxY >= reach) {
+				continue;
+			}
+			const gap = gapBetween(a.paths[0], b.paths[0]);
+			const shrink = (minWeb - gap) / 2;
+			if (gap <= 0 || shrink < 0.002) {
+				continue;
+			}
+			// 离对面孔不到（线宽 + 间距）/ 2 的那一条削掉，平行边正好让出 shrink
+			const keep = (minWeb + gap) / 2;
+			a.cuts.push(...offset(b.paths, keep, 'round'));
+			b.cuts.push(...offset(a.paths, keep, 'round'));
+			pairs.push([i, j]);
+			maxShrink = Math.max(maxShrink, shrink);
 		}
-		// 单个焊盘自己的缺口（防立碑开窗那种 U 形、H 形）也会被闭运算填上，那不是筋，不能削
-		if (!betweenApertures(web, parts)) {
-			continue;
-		}
-		// 筋基本是细长条，用面积和周长反推它的宽度
-		const half = perimeter(web) / 2;
-		const disc = half * half - 4 * a;
-		const width = disc > 0 ? (half - Math.sqrt(disc)) / 2 : Math.sqrt(a);
-		const shrink = (minWeb - width) / 2;
-		if (shrink < 0.002) {
-			continue;
-		}
-		maxShrink = Math.max(maxShrink, shrink);
-		cuts.push(...offset([web], shrink, 'miter'));
-	}
-	if (!cuts.length) {
-		return { apertures, fix: { count: 0, maxShrink: 0 } };
 	}
 	// 孔本来就窄的话再削就直接堵死了，这种宁可不动，留给可打印性检查去报
 	const minOpening = minWeb * 0.75;
-	const cut = union(cuts);
+	const trim = (paths: Paths, cuts: Paths): Paths => {
+		if (!cuts.length) {
+			return paths;
+		}
+		const trimmed = clean(difference(paths, union(cuts))).filter(p => Math.abs(pathArea(p)) >= MIN_APERTURE_AREA);
+		return trimmed.length && offset(trimmed, -minOpening / 2, 'miter').length ? trimmed : paths;
+	};
+	const first = parts.map(part => trim(part.paths, part.cuts));
+	// 平行边这样就够了；圆角焊盘两头还会留下离得近的小尖角，再按削完的形状补一刀
+	const second: Paths[] = first.map(() => []);
+	for (const [i, j] of pairs) {
+		second[i].push(...offset(first[j], minWeb * 0.98, 'round'));
+		second[j].push(...offset(first[i], minWeb * 0.98, 'round'));
+	}
 	const result: Paths = [];
 	let count = 0;
-	for (const island of islands(apertures)) {
-		const original = [island.outer, ...island.holes];
-		const trimmed = clean(difference(original, cut)).filter(p => Math.abs(pathArea(p)) >= MIN_APERTURE_AREA);
-		const changed = Math.abs(area(trimmed) - area(original)) > 1e-6;
-		if (changed && offset(trimmed, -minOpening / 2, 'miter').length) {
-			result.push(...trimmed);
+	first.forEach((paths, i) => {
+		const final = trim(paths, second[i]);
+		if (final !== parts[i].paths) {
 			count++;
 		}
-		else {
-			result.push(...original);
-		}
-	}
-	return { apertures: result, fix: { count, maxShrink: count ? maxShrink : 0 } };
+		result.push(...final);
+	});
+	return { apertures: count ? result : apertures, fix: { count, maxShrink: count ? maxShrink : 0 } };
 }
 
-function betweenApertures(web: Paths[number], parts: Array<{ paths: Paths; box: Bounds }>): boolean {
-	const grown = offset([web], 0.01, 'miter');
-	const box = bounds(grown);
-	if (!box) {
-		return false;
-	}
-	let hits = 0;
-	for (const part of parts) {
-		const b = part.box;
-		if (b.maxX < box.minX || b.minX > box.maxX || b.maxY < box.minY || b.minY > box.maxY) {
-			continue;
+// 两个多边形外轮廓之间的最近距离（mm）
+function gapBetween(a: Paths[number], b: Paths[number]): number {
+	let best = Infinity;
+	const scan = (points: Paths[number], edges: Paths[number]) => {
+		for (const p of points) {
+			for (let i = 0; i < edges.length; i++) {
+				best = Math.min(best, pointToSegment(p, edges[i], edges[(i + 1) % edges.length]));
+			}
 		}
-		if (intersection(grown, part.paths).length && ++hits >= 2) {
-			return true;
-		}
-	}
-	return false;
+	};
+	scan(a, b);
+	scan(b, a);
+	return best / SCALE;
 }
 
-function perimeter(path: Paths[number]): number {
-	let sum = 0;
-	for (let i = 0; i < path.length; i++) {
-		const a = path[i];
-		const b = path[(i + 1) % path.length];
-		sum += Math.hypot(b.X - a.X, b.Y - a.Y);
-	}
-	return sum / SCALE;
+function pointToSegment(p: Paths[number][number], a: Paths[number][number], b: Paths[number][number]): number {
+	const dx = b.X - a.X;
+	const dy = b.Y - a.Y;
+	const len = dx * dx + dy * dy;
+	const t = len ? Math.max(0, Math.min(1, ((p.X - a.X) * dx + (p.Y - a.Y) * dy) / len)) : 0;
+	return Math.hypot(p.X - a.X - t * dx, p.Y - a.Y - t * dy);
 }
 
 function cornerBlocks(box: Bounds, params: StencilParams): Paths {

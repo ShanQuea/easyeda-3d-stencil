@@ -15,10 +15,12 @@ import {
 	flattenImage,
 	generateStencil,
 	inspectMesh,
+	intersection,
 	loadBoard,
 	mergeFineRows,
 	NOZZLE_PRESETS,
 	nozzlePreset,
+	offset,
 	parseGerber,
 	pathArea,
 	pickLayers,
@@ -260,6 +262,25 @@ describe('web keeping', () => {
 		expect(left.minX).toBe(-375);
 		expect(right.maxX).toBe(375);
 		expect(inspectMesh(buildMesh(model.regions)).badEdges).toBe(0);
+	});
+
+	it('trims a row the same way whichever way it faces', () => {
+		// 0.5 脚距的一排圆角焊盘，横竖各一排，结果应该转 90° 完全一样
+		const row = Array.from({ length: 11 }, (_, i) => offset([rect((i - 5) * 500, 0, 238, 1538)], 0.05, 'round')[0]);
+		const turned = row.map(path => path.map(p => ({ X: p.Y, Y: p.X })).reverse());
+		const trimmed = (paste: typeof row) => buildStencil(boardOutline, paste, { ...base, nozzle: 0.25, keepWebs: true }).apertures;
+		const widths = (paths: typeof row, axis: 'x' | 'y') => paths.map(p => bounds([p])!)
+			.map(b => axis === 'x' ? b.maxX - b.minX : b.maxY - b.minY)
+			.sort((a, b) => a - b);
+		const across = trimmed(row);
+		// 圆弧离散的起点不同，横竖会差几个 µm，不影响打印
+		const flipped = widths(trimmed(turned), 'y');
+		widths(across, 'x').forEach((w, i) => expect(Math.abs(w - flipped[i])).toBeLessThan(10));
+		// 相邻两个孔各往外扩 0.12 不相交，说明筋至少 0.24，两头的圆角也不例外
+		const sorted = across.map(p => ({ p, x: bounds([p])!.minX })).sort((a, b) => a.x - b.x).map(e => e.p);
+		for (let i = 1; i < sorted.length; i++) {
+			expect(intersection(offset([sorted[i - 1]], 0.12, 'round'), offset([sorted[i]], 0.12, 'round'))).toEqual([]);
+		}
 	});
 
 	it('does not trim apertures that would end up clogged', () => {
