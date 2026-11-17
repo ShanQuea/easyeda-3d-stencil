@@ -289,7 +289,10 @@ describe('nozzle presets', () => {
 		const fine = applyNozzle({ ...DEFAULT_PARAMS, boardThickness: 1.0, frameMode: 'corners' }, 0.2);
 		expect(fine).toMatchObject({ nozzle: 0.2, thickness: 0.12, clearance: 0.1, boardThickness: 1.0, frameMode: 'corners' });
 		expect(applyNozzle(fine, 0.4)).toMatchObject({ thickness: DEFAULT_PARAMS.thickness, compensation: DEFAULT_PARAMS.compensation, clearance: DEFAULT_PARAMS.clearance });
-		expect(nozzlePreset(0.38).nozzle).toBe(0.4);
+		// 表外的喷嘴不再取最近一档，按相邻两档插值
+		expect(nozzlePreset(0.3)).toMatchObject({ nozzle: 0.3, thickness: 0.16, minPitch: 0.55 });
+		expect(applyNozzle(DEFAULT_PARAMS, 0.5)).toMatchObject({ nozzle: 0.5, thickness: 0.22 });
+		expect(nozzlePreset(0.8).minPitch).toBeGreaterThan(nozzlePreset(0.6).minPitch);
 	});
 
 	it('every preset yields a printable manifold mesh', () => {

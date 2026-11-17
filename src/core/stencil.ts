@@ -303,8 +303,34 @@ export const NOZZLE_PRESETS: NozzlePreset[] = [
 	{ nozzle: 0.6, thickness: 0.24, compensation: 0, clearance: 0.2, layerHeight: 0.24, lineWidth: 0.62, minPitch: 1.27 },
 ];
 
+export const NOZZLE_RANGE = { min: 0.1, max: 1.2 };
+
+/** 常见喷嘴直接查表，别的尺寸（0.3、0.5、0.8…）在相邻两档之间按比例插值 */
 export function nozzlePreset(nozzle: number): NozzlePreset {
-	return NOZZLE_PRESETS.reduce((best, p) => (Math.abs(p.nozzle - nozzle) < Math.abs(best.nozzle - nozzle) ? p : best));
+	const value = Math.min(NOZZLE_RANGE.max, Math.max(NOZZLE_RANGE.min, nozzle));
+	const exact = NOZZLE_PRESETS.find(p => Math.abs(p.nozzle - value) < 1e-6);
+	if (exact) {
+		return exact;
+	}
+	// 表外的按最近一段外推
+	const i = Math.min(NOZZLE_PRESETS.length - 2, Math.max(0, NOZZLE_PRESETS.findIndex(p => p.nozzle > value) - 1));
+	const a = NOZZLE_PRESETS[i];
+	const b = NOZZLE_PRESETS[i + 1];
+	const k = (value - a.nozzle) / (b.nozzle - a.nozzle);
+	const mix = (key: Exclude<keyof NozzlePreset, 'nozzle'>, min = 0) => Math.max(min, round(a[key] + (b[key] - a[key]) * k));
+	return {
+		nozzle: round(value),
+		thickness: mix('thickness', 0.06),
+		compensation: mix('compensation'),
+		clearance: mix('clearance', 0.05),
+		layerHeight: mix('layerHeight', 0.04),
+		lineWidth: mix('lineWidth', 0.1),
+		minPitch: mix('minPitch', 0.2),
+	};
+}
+
+function round(value: number): number {
+	return Math.round(value * 100) / 100;
 }
 
 export function applyNozzle(params: StencilParams, nozzle: number): StencilParams {
