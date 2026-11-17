@@ -38,7 +38,15 @@
 					<p id="source-name" class="muted"></p>
 				</section>
 
-				<details class="group" data-group="printer" open>
+				<section class="method">
+					<div class="segmented tabs" data-param="method">
+						<button type="button" data-value="print" data-i18n="method.print"></button>
+						<button type="button" data-value="jig" data-i18n="method.jig"></button>
+						<button type="button" data-value="laser" data-i18n="method.laser"></button>
+					</div>
+				</section>
+
+				<details class="group" data-group="printer" data-when="method=print" open>
 					<summary data-i18n="printer"></summary>
 					<div class="field">
 						<label data-i18n="nozzle"></label>
@@ -58,7 +66,7 @@
 					<button id="nozzle-reset" class="link" type="button" hidden data-i18n="nozzle.reset"></button>
 				</details>
 
-				<details class="group" data-group="stencil" open>
+				<details class="group" data-group="stencil" data-when="method=print,laser" open>
 					<summary data-i18n="stencil"></summary>
 					<div class="field">
 						<label data-i18n="side"></label>
@@ -71,6 +79,7 @@
 						<label data-i18n="thickness"></label>
 						<span class="num"><input type="number" data-param="thickness" min="0.06" max="1" step="0.02" /><i>mm</i></span>
 					</div>
+					<div data-when="method=print">
 					<label class="check" data-i18n-title="mergeRows.tip">
 						<input type="checkbox" data-param="mergeRows" /><span data-i18n="mergeRows"></span>
 					</label>
@@ -88,15 +97,16 @@
 							<input type="checkbox" data-param="keepWebs" /><span data-i18n="keepWebs"></span>
 						</label>
 					</details>
+					</div>
 				</details>
 
-				<details class="group" data-group="frame" open>
+				<details class="group" data-group="frame" data-when="method=print,laser" open>
 					<summary data-i18n="frame"></summary>
 					<div class="field">
 						<label data-i18n="frame.mode"></label>
 						<div class="segmented" data-param="frameMode">
-							<button type="button" data-value="full" data-i18n="frame.full"></button>
-							<button type="button" data-value="corners" data-i18n="frame.corners"></button>
+							<button type="button" data-value="full" data-when="method=print" data-i18n="frame.full"></button>
+							<button type="button" data-value="corners" data-when="method=print" data-i18n="frame.corners"></button>
 							<button type="button" data-value="none" data-i18n="frame.none"></button>
 						</div>
 					</div>
@@ -119,17 +129,72 @@
 							<label data-i18n="clearance"></label>
 							<span class="num"><input type="number" data-param="clearance" min="0" max="1" step="0.05" /><i>mm</i></span>
 						</div>
-						<div class="field" data-i18n-title="frameDrop.tip">
+						<div class="field" data-when="frameMode=full,corners" data-i18n-title="frameDrop.tip">
 							<label data-i18n="frameDrop"></label>
 							<span class="num"><input type="number" data-param="frameDrop" min="0" max="2" step="0.1" /><i>mm</i></span>
 						</div>
 						<label class="check" data-when="frameMode=full">
 							<input type="checkbox" data-param="notches" /><span data-i18n="notches"></span>
 						</label>
-						<label class="check" data-i18n-title="cornerRelief.tip">
+						<label class="check" data-when="frameMode=full,corners" data-i18n-title="cornerRelief.tip">
 							<input type="checkbox" data-param="cornerRelief" /><span data-i18n="cornerRelief"></span>
 						</label>
 					</details>
+				</details>
+
+				<details class="group" data-group="sheet" data-when="method=jig" open>
+					<summary data-i18n="sheet"></summary>
+					<div class="field">
+						<label data-i18n="side"></label>
+						<div class="segmented" data-param="side">
+							<button type="button" data-value="top" data-i18n="side.top"></button>
+							<button type="button" data-value="bottom" data-i18n="side.bottom"></button>
+						</div>
+					</div>
+					<div class="field" data-i18n-title="sheetSize.tip">
+						<label data-i18n="sheetSize"></label>
+						<span class="pair">
+							<span class="num"><input type="number" data-param="sheetWidth" data-auto min="20" max="500" step="1" /></span>
+							<b>×</b>
+							<span class="num"><input type="number" data-param="sheetHeight" data-auto min="20" max="500" step="1" /><i>mm</i></span>
+						</span>
+					</div>
+					<div class="field">
+						<label data-i18n="sheetThickness"></label>
+						<span class="num"><input type="number" data-param="sheetThickness" min="0.05" max="0.5" step="0.01" /><i>mm</i></span>
+					</div>
+					<div class="field">
+						<label data-i18n="sheetAlign"></label>
+						<div class="segmented" data-param="sheetAlign">
+							<button type="button" data-value="center" data-i18n="sheetAlign.center"></button>
+							<button type="button" data-value="measure" data-i18n="sheetAlign.measure"></button>
+							<button type="button" data-value="free" data-i18n="sheetAlign.free"></button>
+						</div>
+					</div>
+					<p id="align-hint" class="muted"></p>
+					<div class="field sub" data-when="sheetAlign=measure">
+						<label data-i18n="sheetLeft"></label>
+						<span class="num"><input type="number" data-param="sheetLeft" min="0" max="300" step="0.1" /><i>mm</i></span>
+					</div>
+					<div class="field sub" data-when="sheetAlign=measure">
+						<label data-i18n="sheetBottom"></label>
+						<span class="num"><input type="number" data-param="sheetBottom" min="0" max="300" step="0.1" /><i>mm</i></span>
+					</div>
+				</details>
+
+				<details class="group" data-group="jig.board" data-when="method=jig" open>
+					<summary data-i18n="jigBoard"></summary>
+					<div class="field">
+						<label data-i18n="boardThickness"></label>
+						<span class="num"><input type="number" data-param="boardThickness" min="0.2" max="6" step="0.1" /><i>mm</i></span>
+					</div>
+					<div class="field" data-i18n-title="clearance.tip">
+						<label data-i18n="clearance"></label>
+						<span class="num"><input type="number" data-param="clearance" min="0" max="1" step="0.05" /><i>mm</i></span>
+					</div>
+					<label class="check" data-i18n-title="secondSide.tip">
+						<input type="checkbox" data-param="secondSide" /><span data-i18n="secondSide"></span>
+					</label>
 				</details>
 			</div>
 
@@ -139,17 +204,24 @@
 			</section>
 
 			<footer class="export">
-				<button id="export-stl" class="primary" type="button" data-i18n="export.stl" disabled></button>
-				<button id="export-3mf" type="button" data-i18n="export.3mf" disabled></button>
+				<button class="primary" type="button" data-export="stl" data-when="method=print,jig" data-i18n="export.stl" disabled></button>
+				<button type="button" data-export="3mf" data-when="method=print,jig" data-i18n="export.3mf" data-i18n-title="export.3mf.tip" disabled></button>
+				<button class="primary" type="button" data-export="dxf" data-when="method=laser" data-i18n="export.dxf" data-i18n-title="export.laser.tip" disabled></button>
+				<button type="button" data-export="svg" data-when="method=laser" data-i18n="export.svg" data-i18n-title="export.laser.tip" disabled></button>
 			</footer>
 		</aside>
 
 		<main class="stage">
 			<canvas id="gl"></canvas>
 			<canvas id="overlay"></canvas>
+			<div id="cut-view" class="cut-view" hidden>
+				<svg id="cut-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+				<p class="cut-legend"><i class="blue"></i><span data-i18n="cut.outline"></span><i class="red"></i><span data-i18n="cut.apertures"></span><em data-i18n="cut.hint"></em></p>
+			</div>
 			<div class="toolbar">
 				<div class="segmented" id="view-mode">
-					<button type="button" data-value="print" data-i18n="view.print"></button>
+					<button type="button" data-value="print" data-when="method=print,jig" data-i18n="view.print"></button>
+					<button type="button" data-value="cut" data-when="method=laser" data-i18n="view.cut"></button>
 					<button type="button" data-value="assembled" data-i18n="view.assembled"></button>
 				</div>
 				<button id="view-issues" class="chip on" type="button" data-i18n="view.issues"></button>

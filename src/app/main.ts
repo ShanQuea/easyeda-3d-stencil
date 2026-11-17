@@ -1,8 +1,8 @@
-import type { BoardData, Mesh, StencilParams, StencilResult } from '../core';
+import type { BoardData, CutSheet, JigResult, Mesh, StencilParams, StencilResult } from '../core';
 import type { LoadedBoard } from './host';
 import type { Key, Lang } from './i18n';
 import type { Marker, SceneItem } from './viewer';
-import { applyNozzle, buildMesh, DEFAULT_PARAMS, generateStencil, loadBoard, NOZZLE_PRESETS, NOZZLE_RANGE, nozzlePreset, to3mf, toStl } from '../core';
+import { applyNozzle, area, autoSheetSize, bounds, buildMesh, cutSheet, DEFAULT_PARAMS, difference, generateJig, generateStencil, loadBoard, NOZZLE_PRESETS, NOZZLE_RANGE, nozzlePreset, to3mf, toDxf, toStl, toSvg } from '../core';
 import { demoGerbers } from '../core/demo';
 import { DOCK_MAX } from '../window';
 import { dockWindow, hostLanguage, inEda, readBoardThickness, readFiles, readFromEda, saveFile } from './host';
@@ -19,18 +19,26 @@ const COLORS = {
 	stencil: [0.92, 0.93, 0.95] as [number, number, number],
 	board: [0.06, 0.36, 0.23] as [number, number, number],
 	pad: [0.86, 0.69, 0.32] as [number, number, number],
+	jig: [0.42, 0.5, 0.62] as [number, number, number],
+	steel: [0.78, 0.8, 0.84] as [number, number, number],
 	narrow: '#ff5d5d',
 	web: '#ffb020',
 	strip: '#3ecf8e',
 };
 
-type ViewMode = 'print' | 'assembled';
+type ViewMode = 'print' | 'cut' | 'assembled';
+type ExportFormat = 'stl' | '3mf' | 'dxf' | 'svg';
 
 const $ = <T extends HTMLElement>(selector: string): T => document.querySelector<T>(selector)!;
 
 let params: StencilParams = loadParams();
 let board: { name: string; data: BoardData } | undefined;
 let result: StencilResult | undefined;
+// 钢网架模式算的是架子，不是钢网，两套结果分开放
+let jig: JigResult | undefined;
+// 切割图的视口（SVG 坐标，单位 µm），换板子时复位
+let cutHome = { x: 0, y: 0, w: 1, h: 1 };
+let cutBox = { ...cutHome };
 let viewMode: ViewMode = 'print';
 let viewer: Viewer | undefined;
 let autoThickness: number | undefined;
@@ -92,9 +100,16 @@ function syncControls(): void {
 			el.checked = Boolean(value);
 		}
 		else if (document.activeElement !== el) {
-			el.value = String(Math.round(Number(value) * scaleOf(el) * 1000) / 1000);
+			el.value = 'auto' in el.dataset && !value ? '' : String(Math.round(Number(value) * scaleOf(el) * 1000) / 1000);
 		}
 	}
+	const auto = board ? autoSheetSize(board.data.board) : undefined;
+	$<HTMLInputElement>('input[data-param="sheetWidth"]').placeholder = auto ? String(auto.w) : t('auto');
+	$<HTMLInputElement>('input[data-param="sheetHeight"]').placeholder = auto ? String(auto.h) : t('auto');
+	const margins = jig?.model.margins;
+	$('#align-hint').textContent = params.sheetAlign === 'center'
+		? t('align.center', margins ? fmt(margins.left, 1) : '–', margins ? fmt(margins.bottom, 1) : '–')
+		: t(params.sheetAlign === 'measure' ? 'align.measure' : 'align.free');
 	for (const group of Array.from(document.querySelectorAll<HTMLElement>('.segmented[data-param]'))) {
 		const value = String(params[group.dataset.param as keyof StencilParams]);
 		for (const button of Array.from(group.querySelectorAll('button'))) {
@@ -136,6 +151,7 @@ function syncControls(): void {
 	for (const button of Array.from($('#view-mode').querySelectorAll('button'))) {
 		button.classList.toggle('on', button.dataset.value === viewMode);
 	}
+	$('#view-issues').hidden = viewMode === 'cut' || params.method === 'jig';
 }
 
 function bindControls(): void {
@@ -147,6 +163,10 @@ function bindControls(): void {
 				return;
 			}
 			const value = Number(el.value);
+			if (el.value === '' && 'auto' in el.dataset) {
+				setParam(key, 0);
+				return;
+			}
 			if (el.value === '' || !Number.isFinite(value)) {
 				return;
 			}
@@ -225,8 +245,25 @@ function loadGroups(): Record<string, boolean> {
 }
 
 function setParam(key: keyof StencilParams, value: unknown): void {
-	params = { ...params, [key]: value };
+	params = normalize({ ...params, [key]: value });
 	changed();
+}
+
+// 激光切的是平片，没有围框可选；打印模式没有切割图
+function normalize(next: StencilParams): StencilParams {
+	if (next.method === 'laser' && (next.frameMode === 'full' || next.frameMode === 'corners')) {
+		next = { ...next, frameMode: 'none' };
+	}
+	if (!['full', 'corners', 'none'].includes(next.frameMode)) {
+		next = { ...next, frameMode: 'full' };
+	}
+	if (next.method === 'laser' && viewMode === 'print') {
+		viewMode = 'cut';
+	}
+	if (next.method !== 'laser' && viewMode === 'cut') {
+		viewMode = 'print';
+	}
+	return next;
 }
 
 function changed(): void {
@@ -247,10 +284,18 @@ function schedule(keepCamera: boolean): void {
 			return;
 		}
 		try {
-			result = generateStencil(board!.data, params);
+			result = undefined;
+			jig = undefined;
+			if (params.method === 'jig') {
+				jig = generateJig(board!.data, params);
+			}
+			else {
+				result = generateStencil(board!.data, params);
+			}
 		}
 		catch (error) {
 			result = undefined;
+			jig = undefined;
 			toast(t('error.failed', String((error as Error).message ?? error)), true);
 		}
 		busy(undefined);
@@ -261,8 +306,11 @@ function schedule(keepCamera: boolean): void {
 let preview: { key: string; board: Mesh; pads: Mesh } | undefined;
 
 function refresh(keepCamera: boolean): void {
-	$<HTMLButtonElement>('#export-stl').disabled = !result;
-	$<HTMLButtonElement>('#export-3mf').disabled = !result;
+	for (const button of Array.from(document.querySelectorAll<HTMLButtonElement>('[data-export]'))) {
+		button.disabled = !result && !jig;
+	}
+	// 自动尺寸、居中边距这些提示要等算完才知道
+	syncControls();
 	$('#drop').classList.toggle('loaded', Boolean(board));
 	$('#source-name').textContent = board ? board.name : t('source.none');
 	renderStats();
@@ -272,6 +320,11 @@ function refresh(keepCamera: boolean): void {
 
 function renderScene(keepCamera: boolean): void {
 	if (!viewer) {
+		return;
+	}
+	renderCut();
+	if (jig) {
+		renderJig(keepCamera);
 		return;
 	}
 	if (!result) {
@@ -309,6 +362,107 @@ function renderScene(keepCamera: boolean): void {
 	viewer.setScene(items, markers, keepCamera);
 }
 
+function renderCut(): void {
+	const view = $('#cut-view');
+	view.hidden = viewMode !== 'cut' || !result;
+	if (view.hidden || !result) {
+		return;
+	}
+	const sheet = cutSheet(result.model);
+	const box = bounds([...sheet.outline, ...sheet.apertures])!;
+	const pad = 1500;
+	const home = { x: box.minX - pad, y: -box.maxY - pad, w: box.maxX - box.minX + pad * 2, h: box.maxY - box.minY + pad * 2 };
+	if (JSON.stringify(home) !== JSON.stringify(cutHome)) {
+		cutHome = home;
+		cutBox = { ...home };
+	}
+	// 片子填浅色、开孔挖空；描边不随缩放变粗，放大看细间距也清楚
+	const d = (paths: CutSheet['outline']) => paths.map(path => `M${path.map(p => `${p.X} ${-p.Y}`).join('L')}Z`).join('');
+	const line = 'fill="none" vector-effect="non-scaling-stroke" stroke-linejoin="round"';
+	$('#cut-svg').innerHTML = `<path d="${d([...sheet.outline, ...sheet.apertures])}" fill="#dfe4ea" fill-rule="evenodd"/>`
+		+ `<path d="${d(sheet.outline)}" ${line} stroke="#2f6fe0" stroke-width="1.5"/>`
+		+ `<path d="${d(sheet.apertures)}" ${line} stroke="#e5484d" stroke-width="1"/>`;
+	applyCutBox();
+}
+
+function applyCutBox(): void {
+	$('#cut-svg').setAttribute('viewBox', `${cutBox.x} ${cutBox.y} ${cutBox.w} ${cutBox.h}`);
+}
+
+function bindCutView(): void {
+	const view = $('#cut-view');
+	const svg = $('#cut-svg') as unknown as SVGSVGElement;
+	const toSvg = (x: number, y: number) => new DOMPoint(x, y).matrixTransform(svg.getScreenCTM()!.inverse());
+	view.addEventListener('wheel', (e) => {
+		e.preventDefault();
+		const k = Math.exp(e.deltaY * 0.0015);
+		const w = Math.min(cutHome.w * 2, Math.max(cutHome.w / 60, cutBox.w * k));
+		const f = w / cutBox.w;
+		// 鼠标下面那一点不动
+		const p = toSvg(e.clientX, e.clientY);
+		cutBox = { x: p.x - (p.x - cutBox.x) * f, y: p.y - (p.y - cutBox.y) * f, w, h: cutBox.h * f };
+		applyCutBox();
+	}, { passive: false });
+	let last: { x: number; y: number } | undefined;
+	view.addEventListener('pointerdown', (e) => {
+		last = { x: e.clientX, y: e.clientY };
+		view.setPointerCapture(e.pointerId);
+		view.classList.add('dragging');
+	});
+	view.addEventListener('pointermove', (e) => {
+		if (!last) {
+			return;
+		}
+		const unit = 1 / svg.getScreenCTM()!.a;
+		cutBox.x -= (e.clientX - last.x) * unit;
+		cutBox.y -= (e.clientY - last.y) * unit;
+		last = { x: e.clientX, y: e.clientY };
+		applyCutBox();
+	});
+	const end = () => {
+		last = undefined;
+		view.classList.remove('dragging');
+	};
+	view.addEventListener('pointerup', end);
+	view.addEventListener('pointercancel', end);
+	view.addEventListener('dblclick', () => {
+		cutBox = { ...cutHome };
+		applyCutBox();
+	});
+}
+
+function moved(dz: number): Float32Array {
+	const m = new Float32Array(16);
+	m[0] = m[5] = m[10] = m[15] = 1;
+	m[14] = dz;
+	return m;
+}
+
+let jigPreview: { key: string; board: Mesh; pads: Mesh; sheet: Mesh } | undefined;
+
+// 架子本身就是使用姿态；装配预览再把板子放进凹槽、钢网片放进钢网槽
+function renderJig(keepCamera: boolean): void {
+	const { model, mesh } = jig!;
+	const items: SceneItem[] = [{ mesh, color: COLORS.jig }];
+	if (viewMode === 'assembled') {
+		const key = JSON.stringify([params.side, params.boardThickness, params.sheetThickness, model.sheetSize, model.margins, board?.name]);
+		if (jigPreview?.key !== key) {
+			jigPreview = {
+				key,
+				board: buildMesh([{ paths: model.board, height: params.boardThickness }]),
+				pads: buildMesh([{ paths: model.apertures, height: PAD_HEIGHT }]),
+				sheet: buildMesh([{ paths: difference(model.sheet, model.apertures), height: params.sheetThickness }]),
+			};
+		}
+		const boardTop = model.top + 0.05;
+		items.push({ mesh: jigPreview.board, color: COLORS.board, matrix: moved(boardTop - params.boardThickness) });
+		items.push({ mesh: jigPreview.pads, color: COLORS.pad, matrix: moved(boardTop - PAD_HEIGHT + 0.01) });
+		items.push({ mesh: jigPreview.sheet, color: COLORS.steel, matrix: moved(boardTop) });
+	}
+	viewer!.showGrid = viewMode !== 'assembled';
+	viewer!.setScene(items, [], keepCamera);
+}
+
 // 问题点在当前视图里的位置：装配预览是翻过来扣在板上的
 function place(point: { x: number; y: number }): [number, number, number] {
 	return viewMode === 'assembled' ? [-point.x, point.y, params.boardThickness + params.thickness] : [point.x, point.y, params.thickness];
@@ -328,16 +482,19 @@ function focusNext(key: string, points: Array<{ x: number; y: number }>): void {
 function renderStats(): void {
 	const el = $('#stats');
 	el.textContent = '';
-	if (!result) {
-		return;
+	const rows: Array<[Key, string]> = [];
+	if (jig) {
+		const { model } = jig;
+		const volume = model.regions.reduce((sum, r) => sum + area(r.paths) * r.height, 0);
+		rows.push(
+			['stat.size', `${fmt(model.width, 1)} × ${fmt(model.depth, 1)} × ${fmt(model.height)} mm`],
+			['stat.sheet', `${fmt(model.sheetSize.w, 1)} × ${fmt(model.sheetSize.h, 1)} mm`],
+			['stat.filament', t('stat.filament.value', fmt(volume * PLA_DENSITY, 1))],
+		);
 	}
-	const { analysis } = result;
-	const rows: Array<[Key, string]> = [
-		['stat.size', `${fmt(analysis.width, 1)} × ${fmt(analysis.depth, 1)} × ${fmt(analysis.height)} mm`],
-		['stat.apertures', String(analysis.apertureCount)],
-		['stat.paste', `${fmt(analysis.pasteVolume, 1)} mm³`],
-		['stat.filament', t('stat.filament.value', fmt(analysis.volume * PLA_DENSITY, 1))],
-	];
+	else if (result) {
+		rows.push(...statRows(result));
+	}
 	for (const [key, value] of rows) {
 		const div = document.createElement('div');
 		const dt = document.createElement('dt');
@@ -347,6 +504,18 @@ function renderStats(): void {
 		div.append(dt, dd);
 		el.append(div);
 	}
+}
+
+function statRows({ analysis }: StencilResult): Array<[Key, string]> {
+	const rows: Array<[Key, string]> = [
+		['stat.size', `${fmt(analysis.width, 1)} × ${fmt(analysis.depth, 1)} × ${fmt(analysis.height)} mm`],
+		['stat.apertures', String(analysis.apertureCount)],
+		['stat.paste', `${fmt(analysis.pasteVolume, 1)} mm³`],
+	];
+	if (params.method === 'print') {
+		rows.push(['stat.filament', t('stat.filament.value', fmt(analysis.volume * PLA_DENSITY, 1))]);
+	}
+	return rows;
 }
 
 interface CheckItem {
@@ -361,11 +530,14 @@ function renderChecks(): void {
 	const list = $('#checks');
 	list.textContent = '';
 	const items: CheckItem[] = [];
-	if (!board || !result) {
-		items.push({ level: 'info', text: t('source.none') });
+	if (board && jig) {
+		items.push(...collectJigChecks(board.data, jig));
+	}
+	else if (board && result) {
+		items.push(...collectChecks(board.data, result));
 	}
 	else {
-		items.push(...collectChecks(board.data, result));
+		items.push({ level: 'info', text: t('source.none') });
 	}
 	for (const [index, item] of items.entries()) {
 		const li = document.createElement('li');
@@ -398,6 +570,33 @@ function renderChecks(): void {
 	}
 }
 
+function outlineChecks(data: BoardData): CheckItem[] {
+	const items: CheckItem[] = [];
+	const method = data.outlineMethod;
+	if (method === 'bbox' || method === 'stroke' || method === 'none') {
+		items.push({ level: method === 'stroke' ? 'warn' : 'bad', text: t(`check.outline.${method}`) });
+	}
+	for (const warning of data.warnings.slice(0, 3)) {
+		items.push({ level: 'warn', text: t('check.gerber', warning) });
+	}
+	return items;
+}
+
+function collectJigChecks(data: BoardData, { model }: JigResult): CheckItem[] {
+	const items = outlineChecks(data);
+	if (!model.fits) {
+		items.push({ level: 'bad', text: t('check.sheetSmall', fmt(model.sheetSize.w, 1), fmt(model.sheetSize.h, 1)) });
+	}
+	items.push({ level: 'info', text: t('check.jig', fmt(model.sheetSize.w, 1), fmt(model.sheetSize.h, 1), fmt(model.height - model.top)) });
+	if (params.secondSide) {
+		items.push({ level: 'info', text: t('check.second', fmt(model.floor - 0.5, 1)) });
+	}
+	if (!items.some(i => i.level === 'bad' || i.level === 'warn')) {
+		items.unshift({ level: 'ok', text: t('check.ok') });
+	}
+	return items;
+}
+
 function collectChecks(data: BoardData, { analysis, model }: StencilResult): CheckItem[] {
 	const items: CheckItem[] = [];
 	const issues = (kind: string) => analysis.issues.filter(i => i.kind === kind);
@@ -408,7 +607,10 @@ function collectChecks(data: BoardData, { analysis, model }: StencilResult): Che
 	if (method === 'bbox' || method === 'stroke' || method === 'none') {
 		items.push({ level: method === 'stroke' ? 'warn' : 'bad', text: t(`check.outline.${method}`) });
 	}
-	if (model.strips.length && !params.mergeRows) {
+	if (params.method === 'laser') {
+		items.push({ level: 'info', text: t('check.laser', analysis.apertureCount) });
+	}
+	if (model.strips.length && !params.mergeRows && params.method === 'print') {
 		const pitch = Math.min(...model.strips.map(s => s.pitch));
 		items.push({
 			level: 'warn',
@@ -417,7 +619,7 @@ function collectChecks(data: BoardData, { analysis, model }: StencilResult): Che
 			action: { label: t('check.strips.action'), run: () => setParam('mergeRows', true) },
 		});
 	}
-	if (model.strips.length && params.mergeRows) {
+	if (model.strips.length && params.mergeRows && params.method === 'print') {
 		items.push({ level: 'info', text: t('check.merged', model.strips.length, Math.round(params.stripPaste * 100)), note: t('check.merged.note'), points: model.strips });
 	}
 	if (analysis.narrowApertures) {
@@ -429,7 +631,7 @@ function collectChecks(data: BoardData, { analysis, model }: StencilResult): Che
 	if (model.webFix.count) {
 		items.push({ level: 'info', text: t('check.webFix', model.webFix.count, params.nozzle) });
 	}
-	if (params.frameMode !== 'none' && model.frameHeight < 0.4) {
+	if ((params.frameMode === 'full' || params.frameMode === 'corners') && model.frameHeight < 0.4) {
 		items.push({ level: 'warn', text: t('check.frameLow', fmt(model.frameHeight)) });
 	}
 	for (const warning of data.warnings.slice(0, 3)) {
@@ -499,14 +701,27 @@ function loadDemo(): void {
 	useBoard({ name: t('source.demoName'), sources: demoGerbers() });
 }
 
-async function exportAs(format: 'stl' | '3mf'): Promise<void> {
-	if (!result || !board) {
+async function exportAs(format: ExportFormat): Promise<void> {
+	if ((!result && !jig) || !board) {
 		return;
 	}
-	const base = board.name.replace(/[\\/:*?"<>|\s]+/g, '_');
-	const fileName = `${base}_stencil_${params.side}_${fmt(params.thickness)}mm.${format}`;
-	const data = format === 'stl' ? toStl(result.mesh, fileName) : await to3mf(result.mesh, fileName);
-	await saveFile(data, fileName, format === 'stl' ? 'model/stl' : 'model/3mf');
+	const base = `${board.name.replace(/[\\/:*?"<>|\s]+/g, '_')}_${params.side}`;
+	let fileName: string;
+	let data: ArrayBuffer;
+	let mime: string;
+	if (format === 'dxf' || format === 'svg') {
+		const sheet = cutSheet(result!.model);
+		fileName = `${base}_laser.${format}`;
+		data = new TextEncoder().encode(format === 'dxf' ? toDxf(sheet) : toSvg(sheet)).buffer as ArrayBuffer;
+		mime = format === 'dxf' ? 'application/dxf' : 'image/svg+xml';
+	}
+	else {
+		const mesh = jig ? jig.mesh : result!.mesh;
+		fileName = jig ? `${base}_jig.${format}` : `${base}_stencil_${fmt(params.thickness)}mm.${format}`;
+		data = format === 'stl' ? toStl(mesh, fileName) : await to3mf(mesh, fileName);
+		mime = format === 'stl' ? 'model/stl' : 'model/3mf';
+	}
+	await saveFile(data, fileName, mime);
 	toast(t('export.done', fileName));
 }
 
@@ -565,8 +780,10 @@ function bindStage(): void {
 	});
 	$('#load-demo').addEventListener('click', loadDemo);
 	$('#load-eda').addEventListener('click', () => void loadFromEda());
-	$('#export-stl').addEventListener('click', () => void exportAs('stl'));
-	$('#export-3mf').addEventListener('click', () => void exportAs('3mf'));
+	for (const button of Array.from(document.querySelectorAll<HTMLElement>('[data-export]'))) {
+		button.addEventListener('click', () => void exportAs(button.dataset.export as ExportFormat));
+	}
+	bindCutView();
 	$('#lang').addEventListener('click', () => applyLang(getLang() === 'zh' ? 'en' : 'zh'));
 }
 
@@ -611,9 +828,14 @@ async function main(): Promise<void> {
 	if (side === 'top' || side === 'bottom') {
 		params = { ...params, side };
 	}
+	const method = query.get('method');
+	if (method === 'print' || method === 'laser' || method === 'jig') {
+		params = { ...params, method };
+	}
 	if (query.get('view') === 'assembled') {
 		viewMode = 'assembled';
 	}
+	params = normalize(params);
 	syncControls();
 	if (inEda) {
 		// 入口没拿到视口大小时开的是默认窗口，这里挪到右边，新窗口会重新加载
