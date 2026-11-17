@@ -3,7 +3,7 @@
 	"uuid": "b983b764dfd24542a5f9455612dfc17a",
 	"displayName": "3D 打印钢网 / 3D Printed Stencil",
 	"description": "一键把当前 PCB 变成可以直接 FDM 打印的锡膏钢网，带卡板定位围框，导出 STL / 3MF。Generate a 3D-printable solder paste stencil with an alignment frame straight from your PCB.",
-	"version": "1.0.1",
+	"version": "1.1.0",
 	"publisher": "ShanQuea",
 	"engines": {
 		"eda": "^3.2.0"
