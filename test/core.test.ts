@@ -246,6 +246,18 @@ describe('stencil end to end', () => {
 	});
 });
 
+describe('pitch limit', () => {
+	it('treats a pitch equal to the nozzle limit the same on every side', () => {
+		// 0.25 喷嘴极限脚距 0.5，脚距故意比 0.5 多或少 1µm，都不该报
+		const row = (dx: number) => Array.from({ length: 8 }, (_, i) => rect(i * (500 + dx), 0, 300, 1500));
+		const across = mergeFineRows([...row(-1)], 0.5, 0.19, 0.6, false).strips.length;
+		const along = mergeFineRows([...row(1)], 0.5, 0.19, 0.6, false).strips.length;
+		expect(across).toBe(0);
+		expect(along).toBe(0);
+		expect(mergeFineRows(row(-50), 0.5, 0.19, 0.6, false).strips).toHaveLength(1);
+	});
+});
+
 describe('web keeping', () => {
 	// 两个 0.3×1 的焊盘，中间只隔 0.15
 	const pads = [rect(-225, 0, 300, 1000), rect(225, 0, 300, 1000)];

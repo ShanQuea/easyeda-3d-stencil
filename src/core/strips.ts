@@ -26,6 +26,7 @@ interface Pad {
 
 const ANGLE_TOLERANCE = Math.sin((3 * Math.PI) / 180);
 const MIN_PADS = 3;
+const PITCH_TOLERANCE = 0.01;
 
 /**
  * 找出脚距小于 minPitch 的整排焊盘（至少 3 个，同尺寸、同朝向、排成一线）。
@@ -151,7 +152,8 @@ function neighbours(a: Pad, b: Pad, minPitch: number): boolean {
 	const along = Math.abs(dx * a.ax + dy * a.ay);
 	const across = Math.abs(-dx * a.ay + dy * a.ax);
 	// 并排（沿长轴基本不错开），中间有缝，脚距又比喷嘴能打的小
-	return along < a.length * 0.15 && across > a.width * 0.9 && across < minPitch;
+	// 脚距正好等于喷嘴极限时算能打；坐标取整会让同一颗芯片各排差几个 µm，不留余量就会有的排报、有的排不报
+	return along < a.length * 0.15 && across > a.width * 0.9 && across < minPitch - PITCH_TOLERANCE;
 }
 
 function toStrip(row: Pad[], minOpening: number, ratio: number): { path: Path; strip: Strip } {
