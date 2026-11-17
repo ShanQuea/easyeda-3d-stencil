@@ -327,6 +327,10 @@ describe('nozzle presets', () => {
 		// 表外的喷嘴不再取最近一档，按相邻两档插值
 		expect(nozzlePreset(0.3)).toMatchObject({ nozzle: 0.3, thickness: 0.16, minPitch: 0.55 });
 		expect(applyNozzle(DEFAULT_PARAMS, 0.5)).toMatchObject({ nozzle: 0.5, thickness: 0.22 });
+		// 换喷嘴关掉合并成条，同一个喷嘴恢复推荐值时保留
+		const merged = { ...DEFAULT_PARAMS, mergeRows: true };
+		expect(applyNozzle(merged, 0.2).mergeRows).toBe(false);
+		expect(applyNozzle(merged, 0.4).mergeRows).toBe(true);
 		expect(nozzlePreset(0.8).minPitch).toBeGreaterThan(nozzlePreset(0.6).minPitch);
 	});
 

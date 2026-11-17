@@ -347,5 +347,7 @@ function round(value: number): number {
 
 export function applyNozzle(params: StencilParams, nozzle: number): StencilParams {
 	const preset = nozzlePreset(nozzle);
-	return { ...params, nozzle: preset.nozzle, thickness: preset.thickness, compensation: preset.compensation, clearance: preset.clearance };
+	// 合并成条是冲着某个喷嘴打不出单孔才开的，换了喷嘴让检查按新喷嘴重新判断
+	const mergeRows = preset.nozzle === params.nozzle && params.mergeRows;
+	return { ...params, nozzle: preset.nozzle, thickness: preset.thickness, compensation: preset.compensation, clearance: preset.clearance, mergeRows };
 }
