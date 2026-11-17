@@ -2,7 +2,9 @@
 // 贴床的光面是刮锡膏那面，用的时候整个翻过来扣在板上，
 // 所以顶层要左右镜像；底层不用，Gerber 底层本来就是从顶面透视看的
 import type { Bounds, Paths } from './geom';
+import type { Strip } from './strips';
 import { area, bounds, circle, clean, difference, intersection, islands, mirrorX, offset, pathArea, rect, SCALE, toUnits, translate, union } from './geom';
+import { mergeFineRows } from './strips';
 
 export type FrameMode = 'full' | 'corners' | 'none';
 export type Side = 'top' | 'bottom';
@@ -24,6 +26,10 @@ export interface StencilParams {
 	compensation: number;
 	// 孔间筋不够一条线宽时，两边的孔各让一点
 	keepWebs: boolean;
+	// 喷嘴打不出的细间距整排脚，并成一条窄缝
+	mergeRows: boolean;
+	// 合并后的锡量占原来开孔的比例
+	stripPaste: number;
 	nozzle: number;
 }
 
@@ -41,6 +47,8 @@ export const DEFAULT_PARAMS: StencilParams = {
 	cornerRelief: true,
 	compensation: 0,
 	keepWebs: true,
+	mergeRows: false,
+	stripPaste: 0.6,
 	nozzle: 0.4,
 };
 
@@ -64,6 +72,8 @@ export interface StencilModel {
 	frame: Paths;
 	apertures: Paths;
 	webFix: WebFix;
+	// 可以合并成条的整排脚；mergeRows 打开时就是已经合并的
+	strips: Strip[];
 	frameHeight: number;
 	mirrored: boolean;
 	shift: { x: number; y: number };
@@ -99,6 +109,10 @@ export function buildStencil(board: Paths, paste: Paths, params: StencilParams):
 	}
 	apertures = clean(intersection(apertures, boardPaths)).filter(p => Math.abs(pathArea(p)) >= MIN_APERTURE_AREA);
 
+	const minPitch = nozzlePreset(params.nozzle).minPitch;
+	const rows = mergeFineRows(apertures, minPitch, params.nozzle * 0.75, params.stripPaste, params.mergeRows);
+	apertures = rows.apertures;
+
 	let webFix: WebFix = { count: 0, maxShrink: 0 };
 	if (params.keepWebs) {
 		const widened = widenWebs(apertures, params.nozzle);
@@ -133,7 +147,7 @@ export function buildStencil(board: Paths, paste: Paths, params: StencilParams):
 		regions.push({ paths: frame, height: params.thickness + frameHeight });
 	}
 
-	return { regions, board: boardPaths, cavity, plate, frame, apertures, webFix, frameHeight, mirrored, shift, bounds: plateBounds };
+	return { regions, board: boardPaths, cavity, plate, frame, apertures, webFix, strips: rows.strips, frameHeight, mirrored, shift, bounds: plateBounds };
 }
 
 // 相邻两个孔之间的筋窄于 minWeb 时，把筋两侧的孔各削掉一半差值，让筋刚好够一条线宽。

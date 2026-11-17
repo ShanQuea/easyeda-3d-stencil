@@ -17,6 +17,7 @@ export * from './layers';
 export * from './mesh';
 export * from './outline';
 export * from './stencil';
+export * from './strips';
 
 export interface GerberSources {
 	outline?: string;

@@ -16,9 +16,11 @@ import {
 	generateStencil,
 	inspectMesh,
 	loadBoard,
+	mergeFineRows,
 	NOZZLE_PRESETS,
 	nozzlePreset,
 	parseGerber,
+	pathArea,
 	pickLayers,
 	rect,
 	to3mf,
@@ -304,3 +306,41 @@ describe('nozzle presets', () => {
 		}
 	});
 });
+
+describe('fine-pitch strips', () => {
+	// 一排 8 个 0.27×1.3 的脚，0.5 间距，像 LQFP 的一边；再放一个 0603
+	const row = Array.from({ length: 8 }, (_, i) => rect(i * 500, 0, 270, 1300));
+	const chip = rect(10000, 0, 800, 900);
+	const boardOutline = [rect(2000, 0, 20000, 10000)];
+	const base = { ...DEFAULT_PARAMS, side: 'bottom' as const, frameMode: 'none' as const, nozzle: 0.4 };
+
+	it('finds the row but leaves it alone when the option is off', () => {
+		const model = buildStencil(boardOutline, [...row, chip], base);
+		expect(model.strips).toHaveLength(1);
+		expect(model.strips[0]).toMatchObject({ pads: 8 });
+		expect(model.strips[0].pitch).toBeCloseTo(0.5, 3);
+		expect(islandsCount(model.apertures)).toBe(9);
+	});
+
+	it('merges the row into one slot holding the chosen share of paste', () => {
+		const model = buildStencil(boardOutline, [...row, chip], { ...base, mergeRows: true, keepWebs: false, stripPaste: 0.6 });
+		expect(islandsCount(model.apertures)).toBe(2);
+		const padArea = 8 * 0.27 * 1.3;
+		expect(area(model.apertures) - 0.8 * 0.9).toBeCloseTo(padArea * 0.6, 2);
+		const analysis = analyze(model, base);
+		expect(analysis.narrowApertures).toBe(0);
+		expect(inspectMesh(buildMesh(model.regions)).badEdges).toBe(0);
+	});
+
+	it('works for rotated parts and ignores pitches the nozzle can print', () => {
+		const angle = Math.PI / 6;
+		const rotated = row.map(path => path.map(p => ({ X: Math.round(p.X * Math.cos(angle) - p.Y * Math.sin(angle)), Y: Math.round(p.X * Math.sin(angle) + p.Y * Math.cos(angle)) })));
+		expect(mergeFineRows(rotated, 0.65, 0.3, 0.6, true).strips).toHaveLength(1);
+		const wide = Array.from({ length: 8 }, (_, i) => rect(i * 800, 0, 400, 1300));
+		expect(mergeFineRows(wide, 0.65, 0.3, 0.6, true).strips).toHaveLength(0);
+	});
+});
+
+function islandsCount(paths: ReturnType<typeof rect>[]): number {
+	return paths.filter(p => pathArea(p) > 0).length;
+}
