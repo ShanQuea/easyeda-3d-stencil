@@ -8,8 +8,13 @@ import { mergeFineRows } from './strips';
 
 export type FrameMode = 'full' | 'corners' | 'none';
 export type Side = 'top' | 'bottom';
+// 3D 打印整个钢网 / 激光切一张平片 / 给外面做的钢网打个架子
+export type Method = 'print' | 'laser' | 'jig';
+// 钢网片怎么在架子里定位：图形居中 / 按实测边距 / 留余量目视对好再贴胶带
+export type SheetAlign = 'center' | 'measure' | 'free';
 
 export interface StencilParams {
+	method: Method;
 	side: Side;
 	thickness: number;
 	boardThickness: number;
@@ -31,9 +36,20 @@ export interface StencilParams {
 	// 合并后的锡量占原来开孔的比例
 	stripPaste: number;
 	nozzle: number;
+	// 下面是钢网架用的：钢网片尺寸（0 = 按板子自动）和厚度
+	sheetWidth: number;
+	sheetHeight: number;
+	sheetThickness: number;
+	sheetAlign: SheetAlign;
+	// 实测：从刷锡那面看，钢网左边缘到最左开孔、下边缘到最下开孔的距离
+	sheetLeft: number;
+	sheetBottom: number;
+	// 另一面已经贴了件，凹槽底要挖空
+	secondSide: boolean;
 }
 
 export const DEFAULT_PARAMS: StencilParams = {
+	method: 'print',
 	side: 'top',
 	thickness: 0.2,
 	boardThickness: 1.6,
@@ -50,6 +66,13 @@ export const DEFAULT_PARAMS: StencilParams = {
 	mergeRows: false,
 	stripPaste: 0.6,
 	nozzle: 0.4,
+	sheetWidth: 0,
+	sheetHeight: 0,
+	sheetThickness: 0.12,
+	sheetAlign: 'center',
+	sheetLeft: 0,
+	sheetBottom: 0,
+	secondSide: false,
 };
 
 export interface StencilRegion {

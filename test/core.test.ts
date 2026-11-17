@@ -7,15 +7,18 @@ import {
 	buildMesh,
 	buildStencil,
 	chainLoops,
+	cutSheet,
 	DEFAULT_PARAMS,
 	detectLayer,
 	difference,
 	evaluateExpression,
 	extractOutline,
 	flattenImage,
+	generateJig,
 	generateStencil,
 	inspectMesh,
 	intersection,
+	JIG,
 	loadBoard,
 	mergeFineRows,
 	NOZZLE_PRESETS,
@@ -26,7 +29,9 @@ import {
 	pickLayers,
 	rect,
 	to3mf,
+	toDxf,
 	toStl,
+	toSvg,
 } from '../src/core';
 import { DEMO_BOARD, demoGerbers } from '../src/core/demo';
 
@@ -243,6 +248,64 @@ describe('stencil end to end', () => {
 		const zip = new Uint8Array(await to3mf(mesh));
 		expect(String.fromCharCode(zip[0], zip[1])).toBe('PK');
 		expect(zip.byteLength).toBeGreaterThan(1000);
+	});
+
+	for (const side of ['top', 'bottom'] as const) {
+		for (const secondSide of [false, true]) {
+			it(`builds a manifold jig for a fab stencil (${side}${secondSide ? ', second side' : ''})`, () => {
+				const params = { ...DEFAULT_PARAMS, method: 'jig' as const, side, secondSide };
+				const { model, mesh } = generateJig(data, params);
+				const report = inspectMesh(mesh);
+				expect(report.badEdges).toBe(0);
+				const expected = model.regions.reduce((sum, r) => sum + area(r.paths) * r.height, 0);
+				expect(report.volume / expected).toBeCloseTo(1, 3);
+
+				// 自动尺寸：板子每边留 25mm 再取整
+				expect(model.sheetSize.auto).toBe(true);
+				expect(model.fits).toBe(true);
+				// 板面比台面高 0.05，钢网槽固定深度
+				expect(model.top).toBeCloseTo(model.floor + params.boardThickness - JIG.proud, 6);
+				expect(model.height).toBeCloseTo(model.top + JIG.lip, 6);
+				// 开孔都落在板子里
+				expect(area(difference(model.apertures, model.board))).toBeCloseTo(0, 3);
+			});
+		}
+	}
+
+	it('places the sheet pocket from measured margins and flags a sheet that is too small', () => {
+		const base = { ...DEFAULT_PARAMS, method: 'jig' as const, sheetWidth: 100, sheetHeight: 80 };
+		const centred = generateJig(data, base).model;
+		// 居中时左右边距一样
+		const sheetBox = bounds(centred.sheet)!;
+		const pattern = bounds(centred.apertures)!;
+		expect(centred.margins.left).toBeCloseTo((pattern.maxX - pattern.minX) / -2000 + 50, 2);
+		expect(sheetBox.maxX - pattern.maxX).toBeCloseTo(pattern.minX - sheetBox.minX, -1);
+
+		// 实测边距填多少，算回来就是多少
+		const measured = generateJig(data, { ...base, sheetAlign: 'measure', sheetLeft: 12.5, sheetBottom: 20 }).model;
+		expect(measured.margins.left).toBeCloseTo(12.5, 2);
+		expect(measured.margins.bottom).toBeCloseTo(20, 2);
+
+		expect(generateJig(data, { ...base, sheetWidth: 40, sheetHeight: 30 }).model.fits).toBe(false);
+	});
+
+	it('exports laser-cut SVG and DXF without nozzle tweaks', () => {
+		const params = { ...DEFAULT_PARAMS, method: 'laser' as const, nozzle: 0.4, mergeRows: true, compensation: 0.05 };
+		const { model, analysis } = generateStencil(data, params);
+		expect(analysis.issues).toEqual([]);
+		const sheet = cutSheet(model);
+		// 激光没有喷嘴限制，开孔一个不少
+		expect(sheet.apertures.length).toBe(data.paste.top.length);
+		expect(area(sheet.apertures)).toBeCloseTo(area(data.paste.top), 0);
+
+		const svg = toSvg(sheet);
+		expect(svg).toMatch(/<svg[^>]+width="[\d.]+mm"/);
+		expect(svg).toContain('stroke="#ff0000"');
+		expect(svg).not.toMatch(/NaN|[ML ]-\d/);
+
+		const dxf = toDxf(sheet);
+		expect(dxf.match(/^POLYLINE$/gm)).toHaveLength(sheet.outline.length + sheet.apertures.length);
+		expect(dxf.trim().endsWith('EOF')).toBe(true);
 	});
 });
 
