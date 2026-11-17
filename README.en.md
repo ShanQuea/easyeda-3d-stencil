@@ -38,6 +38,8 @@ Not on EasyEDA? The [web version](https://shanquea.github.io/easyeda-3d-stencil/
 - Nozzle presets (0.2 / 0.25 / 0.4 / 0.6, or any custom size) that set sheet thickness, aperture offset and fit clearance, and tell you what layer height and line width to use
 - When a web between pads is thinner than one extrusion line, both apertures are trimmed slightly so the web survives. Apertures too small to trim are left alone and reported
 - Printability check: apertures that will clog are marked red, webs too thin to print amber; click an issue to zoom to it
+- Laser cut mode: switch to "Laser cut" at the top to get a DXF / SVG for PET film or steel. Apertures are 1:1 from Gerber with no nozzle tweaks; outline is blue, apertures red, so laser software can put them on separate layers. The cut sheet view zooms in to check every aperture
+- Jig: a printable base for a frameless stencil from a fab such as JLCPCB. The board sits flush in a pocket shaped like the outline, and a shallow pocket on top takes the stencil sheet so the apertures land on the pads. Three ways to place the sheet: centred (it tells you the margins to check with a ruler), measured (enter the left and bottom margins from your actual sheet), or by eye (2mm of slack, then tape it). "Other side populated" opens the pocket floor for the second side
 - Merge fine-pitch rows: when the nozzle cannot print each aperture, a whole row of pins becomes one narrow slot with less paste (60% by default). Reflow pulls the paste back onto the pads; drag-solder any bridges. Meant for leaded packages like SOIC and QFP, use with care on QFN
 - Assembled preview of the stencil sitting on the board
 - Top side mirrored automatically, STL / 3MF export
