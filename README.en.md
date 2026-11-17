@@ -35,9 +35,10 @@ Not on EasyEDA? The [web version](https://shanquea.github.io/easyeda-3d-stencil/
 ## Features
 
 - A frame sized from the board thickness: full, corner clips, or none
-- Nozzle presets (0.2 / 0.25 / 0.4 / 0.6) that set sheet thickness, aperture offset and fit clearance, and tell you what layer height and line width to use
+- Nozzle presets (0.2 / 0.25 / 0.4 / 0.6, or any custom size) that set sheet thickness, aperture offset and fit clearance, and tell you what layer height and line width to use
 - When a web between pads is thinner than one extrusion line, both apertures are trimmed slightly so the web survives. Apertures too small to trim are left alone and reported
-- Printability check: apertures that will clog are marked red, webs too thin to print amber
+- Printability check: apertures that will clog are marked red, webs too thin to print amber; click an issue to zoom to it
+- Merge fine-pitch rows: when the nozzle cannot print each aperture, a whole row of pins becomes one narrow slot with less paste (60% by default). Reflow pulls the paste back onto the pads; drag-solder any bridges. Meant for leaded packages like SOIC and QFP, use with care on QFN
 - Assembled preview of the stencil sitting on the board
 - Top side mirrored automatically, STL / 3MF export
 
@@ -55,7 +56,7 @@ Same board: the 0.5mm pitch QFP is all red with a 0.4 nozzle and clean with a 0.
 
 An FDM line is roughly as wide as the nozzle, so this won't replace a laser-cut stencil. Rough guide, derived from line widths:
 
-- 0.4 nozzle: 0603, 0805, SOT-23, SOIC and TSSOP are fine, 0.5mm pitch QFP/QFN is not
+- 0.4 nozzle: 0603, 0805, SOT-23, SOIC and TSSOP are fine; 0.5mm pitch QFP/QFN needs "Merge fine-pitch rows"
 - 0.2 nozzle: 0402 and 0.5mm pitch QFP/QFN work, 0.4mm pitch is borderline
 - BGA and 0201: no
 
