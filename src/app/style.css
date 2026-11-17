@@ -86,13 +86,76 @@ body {
 	scrollbar-color: var(--line) transparent;
 }
 
-section {
-	padding: 12px 0;
+section.source {
+	padding: 12px 0 10px;
 	border-bottom: 1px solid var(--line);
 }
 
-section:last-child {
+/* 可折叠的参数分组，标题行像切片软件那样带个箭头 */
+details.group {
+	padding: 4px 0 12px;
+	border-bottom: 1px solid var(--line);
+}
+
+details.group:last-child {
 	border-bottom: 0;
+}
+
+details > summary {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	list-style: none;
+	cursor: pointer;
+	user-select: none;
+}
+
+details > summary::-webkit-details-marker {
+	display: none;
+}
+
+details > summary::before {
+	content: '';
+	width: 6px;
+	height: 6px;
+	border-right: 1.5px solid currentColor;
+	border-bottom: 1.5px solid currentColor;
+	transform: rotate(-45deg);
+	transition: transform 0.15s;
+	opacity: 0.7;
+}
+
+details[open] > summary::before {
+	transform: rotate(45deg);
+}
+
+details.group > summary {
+	padding: 10px 0 4px;
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--text);
+}
+
+details.group:not([open]) {
+	padding-bottom: 4px;
+}
+
+details.advanced {
+	margin-top: 10px;
+	padding: 2px 10px 8px;
+	background: rgba(255, 255, 255, 0.02);
+	border: 1px solid var(--line);
+	border-radius: 8px;
+}
+
+details.advanced > summary {
+	padding: 6px 0 0;
+	font-size: 12px;
+	color: var(--muted);
+}
+
+details.advanced:not([open]) {
+	padding-bottom: 6px;
 }
 
 h2 {
@@ -117,6 +180,10 @@ h2 {
 	gap: 10px;
 	min-height: 30px;
 	margin-top: 6px;
+}
+
+.field.sub {
+	padding-left: 22px;
 }
 
 .field label {
@@ -170,6 +237,11 @@ button.ghost {
 	background: transparent;
 }
 
+button.small {
+	padding: 3px 10px;
+	font-size: 12px;
+}
+
 button.link {
 	margin-top: 4px;
 	padding: 0;
@@ -206,7 +278,8 @@ button.link:hover:not(:disabled) {
 .segmented button {
 	border: 0;
 	background: transparent;
-	padding: 3px 10px;
+	padding: 3px 7px;
+	white-space: nowrap;
 	border-radius: 5px;
 	color: var(--muted);
 }
@@ -214,6 +287,7 @@ button.link:hover:not(:disabled) {
 .segmented button.on {
 	background: #2f3744;
 	color: var(--text);
+	box-shadow: inset 0 0 0 1px #3d4757;
 }
 
 .num {
@@ -230,7 +304,14 @@ button.link:hover:not(:disabled) {
 	border-color: var(--accent);
 }
 
+.num input::-webkit-inner-spin-button,
+.num input::-webkit-outer-spin-button {
+	margin: 0;
+	appearance: none;
+}
+
 .num input {
+	appearance: textfield;
 	width: 100%;
 	min-width: 0;
 	padding: 5px 4px 5px 8px;
@@ -265,6 +346,20 @@ button.link:hover:not(:disabled) {
 	margin: 0;
 }
 
+.issues {
+	max-height: 28vh;
+	overflow-y: auto;
+	padding: 10px 16px 8px;
+	border-top: 1px solid var(--line);
+	background: #171a20;
+	scrollbar-width: thin;
+	scrollbar-color: var(--line) transparent;
+}
+
+.issues h2 {
+	margin-bottom: 4px;
+}
+
 .checks {
 	margin: 0;
 	padding: 0;
@@ -273,17 +368,41 @@ button.link:hover:not(:disabled) {
 
 .checks li {
 	position: relative;
-	padding: 2px 0 2px 16px;
-	margin-top: 4px;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px 8px;
+	padding: 4px 6px 4px 20px;
+	margin: 2px -6px 0;
+	border-radius: 6px;
 	font-size: 12px;
 	color: #c5cbd6;
+}
+
+.checks li.locate {
+	cursor: pointer;
+}
+
+.checks li.locate:hover {
+	background: rgba(255, 255, 255, 0.04);
+}
+
+.checks li.locate span::after {
+	content: ' ›';
+	color: var(--muted);
+}
+
+.checks li small {
+	flex-basis: 100%;
+	color: var(--muted);
+	font-size: 11px;
 }
 
 .checks li::before {
 	content: '';
 	position: absolute;
-	left: 2px;
-	top: 9px;
+	left: 7px;
+	top: 11px;
 	width: 7px;
 	height: 7px;
 	border-radius: 50%;
@@ -307,11 +426,20 @@ button.link:hover:not(:disabled) {
 	gap: 8px;
 	padding: 12px 16px;
 	border-top: 1px solid var(--line);
+	background: #171a20;
 }
 
 .export button {
-	flex: 1;
 	padding: 8px 10px;
+}
+
+.export .primary {
+	flex: 1.6;
+}
+
+.export button:not(.primary) {
+	flex: 1;
+	background: transparent;
 }
 
 .stage {
@@ -371,9 +499,9 @@ button.link:hover:not(:disabled) {
 	left: 12px;
 	bottom: 12px;
 	display: flex;
-	gap: 18px;
+	gap: 0;
 	margin: 0;
-	padding: 8px 12px;
+	padding: 8px 4px;
 	background: rgba(26, 30, 37, 0.88);
 	backdrop-filter: blur(6px);
 	border: 1px solid var(--line);
@@ -387,6 +515,11 @@ button.link:hover:not(:disabled) {
 .stats div {
 	display: flex;
 	flex-direction: column;
+	padding: 0 12px;
+}
+
+.stats div + div {
+	border-left: 1px solid var(--line);
 }
 
 .stats dt {
@@ -396,6 +529,8 @@ button.link:hover:not(:disabled) {
 
 .stats dd {
 	margin: 0;
+	white-space: nowrap;
+	font-weight: 600;
 	font-variant-numeric: tabular-nums;
 }
 

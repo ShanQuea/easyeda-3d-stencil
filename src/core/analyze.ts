@@ -18,6 +18,8 @@ export interface Analysis {
 	thinWebs: number;
 	apertureArea: number;
 	pasteVolume: number;
+	// 钢网本身的体积（mm³），估用料
+	volume: number;
 	width: number;
 	depth: number;
 	height: number;
@@ -70,6 +72,7 @@ export function analyze(model: StencilModel, params: StencilParams): Analysis {
 		thinWebs,
 		apertureArea,
 		pasteVolume: apertureArea * params.thickness,
+		volume: model.regions.reduce((sum, r) => sum + area(r.paths) * r.height, 0),
 		width: toMm(box.maxX - box.minX),
 		depth: toMm(box.maxY - box.minY),
 		height: params.thickness + model.frameHeight,

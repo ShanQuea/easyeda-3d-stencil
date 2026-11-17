@@ -2,7 +2,7 @@ import type { BoardData, Mesh, StencilParams, StencilResult } from '../core';
 import type { LoadedBoard } from './host';
 import type { Key, Lang } from './i18n';
 import type { Marker, SceneItem } from './viewer';
-import { applyNozzle, buildMesh, DEFAULT_PARAMS, generateStencil, loadBoard, nozzlePreset, to3mf, toStl } from '../core';
+import { applyNozzle, buildMesh, DEFAULT_PARAMS, generateStencil, loadBoard, NOZZLE_PRESETS, NOZZLE_RANGE, nozzlePreset, to3mf, toStl } from '../core';
 import { demoGerbers } from '../core/demo';
 import { DOCK_MAX } from '../window';
 import { dockWindow, hostLanguage, inEda, readBoardThickness, readFiles, readFromEda, saveFile } from './host';
@@ -10,6 +10,9 @@ import { getLang, setLang, t } from './i18n';
 import { flipOnto, Viewer } from './viewer';
 
 const STORAGE_KEY = 'easyeda-3d-stencil.params';
+const GROUPS_KEY = 'easyeda-3d-stencil.groups';
+// PLA 密度（g/mm³），估用料
+const PLA_DENSITY = 1.24e-3;
 const PAD_HEIGHT = 0.035;
 
 const COLORS = {
@@ -18,6 +21,7 @@ const COLORS = {
 	pad: [0.86, 0.69, 0.32] as [number, number, number],
 	narrow: '#ff5d5d',
 	web: '#ffb020',
+	strip: '#3ecf8e',
 };
 
 type ViewMode = 'print' | 'assembled';
@@ -31,6 +35,10 @@ let viewMode: ViewMode = 'print';
 let viewer: Viewer | undefined;
 let autoThickness: number | undefined;
 let pending = 0;
+// 点了「自定义」还没输数值时也要显示输入框
+let customNozzle = false;
+// 问题列表每类点到第几处了
+const focusIndex = new Map<string, number>();
 
 function loadParams(): StencilParams {
 	try {
@@ -84,7 +92,7 @@ function syncControls(): void {
 			el.checked = Boolean(value);
 		}
 		else if (document.activeElement !== el) {
-			el.value = String(value);
+			el.value = String(Math.round(Number(value) * scaleOf(el) * 1000) / 1000);
 		}
 	}
 	for (const group of Array.from(document.querySelectorAll<HTMLElement>('.segmented[data-param]'))) {
@@ -98,6 +106,18 @@ function syncControls(): void {
 		el.hidden = !values.split(',').includes(String(params[key as keyof StencilParams]));
 	}
 	$('#frame-width-label').textContent = t(params.frameMode === 'none' ? 'frameWidth.none' : 'frameWidth');
+
+	const isPreset = NOZZLE_PRESETS.some(p => Math.abs(p.nozzle - params.nozzle) < 1e-6);
+	const custom = customNozzle || !isPreset;
+	for (const button of Array.from($('#nozzle-pick').querySelectorAll('button'))) {
+		const value = button.dataset.value!;
+		button.classList.toggle('on', value === 'custom' ? custom : !custom && Number(value) === params.nozzle);
+	}
+	$('#nozzle-custom').hidden = !custom;
+	const nozzleInput = $<HTMLInputElement>('#nozzle-input');
+	if (document.activeElement !== nozzleInput) {
+		nozzleInput.value = String(params.nozzle);
+	}
 
 	const preset = nozzlePreset(params.nozzle);
 	$('#nozzle-hint').textContent = t('nozzle.hint', preset.layerHeight, preset.lineWidth, preset.minPitch);
@@ -130,7 +150,7 @@ function bindControls(): void {
 			if (el.value === '' || !Number.isFinite(value)) {
 				return;
 			}
-			setParam(key, Math.min(Number(el.max), Math.max(Number(el.min), value)));
+			setParam(key, Math.min(Number(el.max), Math.max(Number(el.min), value)) / scaleOf(el));
 		});
 		// 输到一半的值不去动它，失焦时再规整
 		el.addEventListener('blur', syncControls);
@@ -141,19 +161,67 @@ function bindControls(): void {
 			if (value === undefined) {
 				return;
 			}
-			if (group.dataset.param === 'nozzle') {
-				params = applyNozzle(params, Number(value));
-				changed();
+			setParam(group.dataset.param as keyof StencilParams, value);
+		});
+	}
+	$('#nozzle-pick').addEventListener('click', (e) => {
+		const value = (e.target as HTMLElement).closest('button')?.dataset.value;
+		if (value === 'custom') {
+			customNozzle = true;
+			syncControls();
+			$<HTMLInputElement>('#nozzle-input').focus();
+		}
+		else if (value) {
+			customNozzle = false;
+			params = applyNozzle(params, Number(value));
+			changed();
+		}
+	});
+	// 喷嘴一改会连带厚度、补偿一起换，等输完再算
+	const nozzleInput = $<HTMLInputElement>('#nozzle-input');
+	nozzleInput.addEventListener('change', () => {
+		const value = Number(nozzleInput.value);
+		if (nozzleInput.value !== '' && Number.isFinite(value)) {
+			params = applyNozzle(params, Math.min(NOZZLE_RANGE.max, Math.max(NOZZLE_RANGE.min, value)));
+			changed();
+		}
+	});
+	nozzleInput.addEventListener('blur', syncControls);
+
+	const open = loadGroups();
+	for (const details of Array.from(document.querySelectorAll<HTMLDetailsElement>('details[data-group]'))) {
+		const key = details.dataset.group!;
+		if (key in open) {
+			details.open = open[key];
+		}
+		details.addEventListener('toggle', () => {
+			open[key] = details.open;
+			try {
+				localStorage.setItem(GROUPS_KEY, JSON.stringify(open));
 			}
-			else {
-				setParam(group.dataset.param as keyof StencilParams, value);
+			catch {
+				// 存不了就算了
 			}
 		});
 	}
+
 	$('#nozzle-reset').addEventListener('click', () => {
 		params = applyNozzle(params, params.nozzle);
 		changed();
 	});
+}
+
+function scaleOf(el: HTMLElement): number {
+	return Number(el.dataset.scale ?? 1);
+}
+
+function loadGroups(): Record<string, boolean> {
+	try {
+		return JSON.parse(localStorage.getItem(GROUPS_KEY) ?? '{}') as Record<string, boolean>;
+	}
+	catch {
+		return {};
+	}
 }
 
 function setParam(key: keyof StencilParams, value: unknown): void {
@@ -217,7 +285,7 @@ function renderScene(keepCamera: boolean): void {
 
 	if (assembled) {
 		// 板子和焊盘只跟外形、开孔有关，改别的参数不用重建
-		const key = JSON.stringify([params.side, params.boardThickness, params.compensation, params.keepWebs, params.nozzle, board?.name, model.apertures.length]);
+		const key = JSON.stringify([params.side, params.boardThickness, params.compensation, params.keepWebs, params.mergeRows, params.stripPaste, params.nozzle, board?.name, model.apertures.length]);
 		if (preview?.key !== key) {
 			preview = {
 				key,
@@ -233,12 +301,28 @@ function renderScene(keepCamera: boolean): void {
 		items.push({ mesh, color: COLORS.stencil });
 	}
 
-	const markers: Marker[] = analysis.issues.map(issue => ({
-		position: assembled ? [-issue.x, issue.y, lift] : [issue.x, issue.y, params.thickness],
-		color: issue.kind === 'narrowAperture' ? COLORS.narrow : COLORS.web,
-	}));
+	const markers: Marker[] = [
+		...analysis.issues.map(issue => ({ position: place(issue), color: issue.kind === 'narrowAperture' ? COLORS.narrow : COLORS.web })),
+		...(params.mergeRows ? model.strips.map(strip => ({ position: place(strip), color: COLORS.strip })) : []),
+	];
 	viewer.showGrid = !assembled;
 	viewer.setScene(items, markers, keepCamera);
+}
+
+// 问题点在当前视图里的位置：装配预览是翻过来扣在板上的
+function place(point: { x: number; y: number }): [number, number, number] {
+	return viewMode === 'assembled' ? [-point.x, point.y, params.boardThickness + params.thickness] : [point.x, point.y, params.thickness];
+}
+
+function focusNext(key: string, points: Array<{ x: number; y: number }>): void {
+	if (!viewer || !points.length) {
+		return;
+	}
+	const i = ((focusIndex.get(key) ?? -1) + 1) % points.length;
+	focusIndex.set(key, i);
+	viewer.showMarkers = true;
+	$('#view-issues').classList.add('on');
+	viewer.focus(place(points[i]));
 }
 
 function renderStats(): void {
@@ -247,12 +331,12 @@ function renderStats(): void {
 	if (!result) {
 		return;
 	}
-	const { analysis, mesh } = result;
+	const { analysis } = result;
 	const rows: Array<[Key, string]> = [
 		['stat.size', `${fmt(analysis.width, 1)} × ${fmt(analysis.depth, 1)} × ${fmt(analysis.height)} mm`],
 		['stat.apertures', String(analysis.apertureCount)],
 		['stat.paste', `${fmt(analysis.pasteVolume, 1)} mm³`],
-		['stat.triangles', (mesh.triangles.length / 3).toLocaleString()],
+		['stat.filament', t('stat.filament.value', fmt(analysis.volume * PLA_DENSITY, 1))],
 	];
 	for (const [key, value] of rows) {
 		const div = document.createElement('div');
@@ -265,51 +349,96 @@ function renderStats(): void {
 	}
 }
 
+interface CheckItem {
+	level: 'ok' | 'warn' | 'bad' | 'info';
+	text: string;
+	note?: string;
+	points?: Array<{ x: number; y: number }>;
+	action?: { label: string; run: () => void };
+}
+
 function renderChecks(): void {
 	const list = $('#checks');
 	list.textContent = '';
-	const add = (level: 'ok' | 'warn' | 'bad' | 'info', text: string): void => {
-		const li = document.createElement('li');
-		li.className = level;
-		li.textContent = text;
-		list.append(li);
-	};
+	const items: CheckItem[] = [];
 	if (!board || !result) {
-		add('info', t('source.none'));
-		return;
+		items.push({ level: 'info', text: t('source.none') });
 	}
-	const { analysis, model } = result;
-	let clean = true;
+	else {
+		items.push(...collectChecks(board.data, result));
+	}
+	for (const [index, item] of items.entries()) {
+		const li = document.createElement('li');
+		li.className = item.level;
+		const text = document.createElement('span');
+		text.textContent = item.text;
+		li.append(text);
+		if (item.note) {
+			const note = document.createElement('small');
+			note.textContent = item.note;
+			li.append(note);
+		}
+		if (item.points?.length) {
+			li.classList.add('locate');
+			li.title = t('check.focus');
+			li.addEventListener('click', () => focusNext(String(index), item.points!));
+		}
+		if (item.action) {
+			const button = document.createElement('button');
+			button.type = 'button';
+			button.className = 'primary small';
+			button.textContent = item.action.label;
+			button.addEventListener('click', (e) => {
+				e.stopPropagation();
+				item.action!.run();
+			});
+			li.append(button);
+		}
+		list.append(li);
+	}
+}
+
+function collectChecks(data: BoardData, { analysis, model }: StencilResult): CheckItem[] {
+	const items: CheckItem[] = [];
+	const issues = (kind: string) => analysis.issues.filter(i => i.kind === kind);
 	if (!analysis.apertureCount) {
-		add('bad', t('check.noPaste'));
-		clean = false;
+		items.push({ level: 'bad', text: t('check.noPaste') });
 	}
-	const method = board.data.outlineMethod;
+	const method = data.outlineMethod;
 	if (method === 'bbox' || method === 'stroke' || method === 'none') {
-		add(method === 'stroke' ? 'warn' : 'bad', t(`check.outline.${method}`));
-		clean = false;
+		items.push({ level: method === 'stroke' ? 'warn' : 'bad', text: t(`check.outline.${method}`) });
 	}
-	if (model.webFix.count) {
-		add('info', t('check.webFix', model.webFix.count, params.nozzle));
+	if (model.strips.length && !params.mergeRows) {
+		const pitch = Math.min(...model.strips.map(s => s.pitch));
+		items.push({
+			level: 'warn',
+			text: t('check.strips', model.strips.length, fmt(pitch), params.nozzle),
+			points: model.strips,
+			action: { label: t('check.strips.action'), run: () => setParam('mergeRows', true) },
+		});
+	}
+	if (model.strips.length && params.mergeRows) {
+		items.push({ level: 'info', text: t('check.merged', model.strips.length, Math.round(params.stripPaste * 100)), note: t('check.merged.note'), points: model.strips });
 	}
 	if (analysis.narrowApertures) {
-		add('bad', t('check.narrow', analysis.narrowApertures, fmt(analysis.minOpening), params.nozzle));
-		clean = false;
+		items.push({ level: 'bad', text: t('check.narrow', analysis.narrowApertures, fmt(analysis.minOpening), params.nozzle), points: issues('narrowAperture') });
 	}
 	if (analysis.thinWebs) {
-		add('warn', t('check.web', analysis.thinWebs, fmt(analysis.minWeb)));
-		clean = false;
+		items.push({ level: 'warn', text: t('check.web', analysis.thinWebs, fmt(analysis.minWeb)), points: issues('thinWeb') });
+	}
+	if (model.webFix.count) {
+		items.push({ level: 'info', text: t('check.webFix', model.webFix.count, params.nozzle) });
 	}
 	if (params.frameMode !== 'none' && model.frameHeight < 0.4) {
-		add('warn', t('check.frameLow', fmt(model.frameHeight)));
-		clean = false;
+		items.push({ level: 'warn', text: t('check.frameLow', fmt(model.frameHeight)) });
 	}
-	for (const warning of board.data.warnings.slice(0, 3)) {
-		add('warn', t('check.gerber', warning));
+	for (const warning of data.warnings.slice(0, 3)) {
+		items.push({ level: 'warn', text: t('check.gerber', warning) });
 	}
-	if (clean) {
-		add('ok', t('check.ok'));
+	if (!items.some(i => i.level === 'bad' || i.level === 'warn')) {
+		items.unshift({ level: 'ok', text: t('check.ok') });
 	}
+	return items;
 }
 
 function useBoard(loaded: LoadedBoard): void {

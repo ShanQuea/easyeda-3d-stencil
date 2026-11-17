@@ -28,8 +28,7 @@
 			</header>
 
 			<div class="scroll">
-				<section>
-					<h2 data-i18n="source"></h2>
+				<section class="source">
 					<div class="row buttons">
 						<button id="load-eda" class="primary" type="button" hidden data-i18n="source.eda"></button>
 						<button id="load-file" type="button" data-i18n="source.file"></button>
@@ -39,23 +38,28 @@
 					<p id="source-name" class="muted"></p>
 				</section>
 
-				<section>
-					<h2 data-i18n="printer"></h2>
+				<details class="group" data-group="printer" open>
+					<summary data-i18n="printer"></summary>
 					<div class="field">
 						<label data-i18n="nozzle"></label>
-						<div class="segmented" data-param="nozzle">
+						<div class="segmented" id="nozzle-pick">
 							<button type="button" data-value="0.2">0.2</button>
 							<button type="button" data-value="0.25">0.25</button>
 							<button type="button" data-value="0.4">0.4</button>
 							<button type="button" data-value="0.6">0.6</button>
+							<button type="button" data-value="custom" data-i18n="nozzle.custom"></button>
 						</div>
+					</div>
+					<div class="field" id="nozzle-custom" hidden>
+						<label data-i18n="nozzle.size"></label>
+						<span class="num"><input id="nozzle-input" type="number" min="0.1" max="1.2" step="0.05" /><i>mm</i></span>
 					</div>
 					<p id="nozzle-hint" class="muted"></p>
 					<button id="nozzle-reset" class="link" type="button" hidden data-i18n="nozzle.reset"></button>
-				</section>
+				</details>
 
-				<section>
-					<h2 data-i18n="stencil"></h2>
+				<details class="group" data-group="stencil" open>
+					<summary data-i18n="stencil"></summary>
 					<div class="field">
 						<label data-i18n="side"></label>
 						<div class="segmented" data-param="side">
@@ -65,19 +69,29 @@
 					</div>
 					<div class="field" data-i18n-title="thickness.tip">
 						<label data-i18n="thickness"></label>
-						<span class="num"><input type="number" data-param="thickness" min="0.08" max="1" step="0.02" /><i>mm</i></span>
+						<span class="num"><input type="number" data-param="thickness" min="0.06" max="1" step="0.02" /><i>mm</i></span>
 					</div>
-					<div class="field" data-i18n-title="compensation.tip">
-						<label data-i18n="compensation"></label>
-						<span class="num"><input type="number" data-param="compensation" min="-0.3" max="0.3" step="0.01" /><i>mm</i></span>
-					</div>
-					<label class="check" data-i18n-title="keepWebs.tip">
-						<input type="checkbox" data-param="keepWebs" /><span data-i18n="keepWebs"></span>
+					<label class="check" data-i18n-title="mergeRows.tip">
+						<input type="checkbox" data-param="mergeRows" /><span data-i18n="mergeRows"></span>
 					</label>
-				</section>
+					<div class="field sub" data-when="mergeRows=true" data-i18n-title="stripPaste.tip">
+						<label data-i18n="stripPaste"></label>
+						<span class="num"><input type="number" data-param="stripPaste" data-scale="100" min="30" max="100" step="5" /><i>%</i></span>
+					</div>
+					<details class="advanced" data-group="stencil.advanced">
+						<summary data-i18n="advanced"></summary>
+						<div class="field" data-i18n-title="compensation.tip">
+							<label data-i18n="compensation"></label>
+							<span class="num"><input type="number" data-param="compensation" min="-0.3" max="0.3" step="0.01" /><i>mm</i></span>
+						</div>
+						<label class="check" data-i18n-title="keepWebs.tip">
+							<input type="checkbox" data-param="keepWebs" /><span data-i18n="keepWebs"></span>
+						</label>
+					</details>
+				</details>
 
-				<section>
-					<h2 data-i18n="frame"></h2>
+				<details class="group" data-group="frame" open>
+					<summary data-i18n="frame"></summary>
 					<div class="field">
 						<label data-i18n="frame.mode"></label>
 						<div class="segmented" data-param="frameMode">
@@ -91,35 +105,38 @@
 						<span class="num"><input type="number" data-param="boardThickness" min="0.2" max="6" step="0.1" /><i>mm</i></span>
 					</div>
 					<p id="thickness-note" class="muted" hidden></p>
-					<div class="field" data-when="frameMode=full,corners" data-i18n-title="clearance.tip">
-						<label data-i18n="clearance"></label>
-						<span class="num"><input type="number" data-param="clearance" min="0" max="1" step="0.05" /><i>mm</i></span>
-					</div>
 					<div class="field">
 						<label id="frame-width-label" data-i18n="frameWidth"></label>
 						<span class="num"><input type="number" data-param="frameWidth" min="1" max="30" step="0.5" /><i>mm</i></span>
-					</div>
-					<div class="field" data-when="frameMode=full,corners" data-i18n-title="frameDrop.tip">
-						<label data-i18n="frameDrop"></label>
-						<span class="num"><input type="number" data-param="frameDrop" min="0" max="2" step="0.1" /><i>mm</i></span>
 					</div>
 					<div class="field" data-when="frameMode=corners">
 						<label data-i18n="cornerLength"></label>
 						<span class="num"><input type="number" data-param="cornerLength" min="3" max="60" step="1" /><i>mm</i></span>
 					</div>
-					<label class="check" data-when="frameMode=full">
-						<input type="checkbox" data-param="notches" /><span data-i18n="notches"></span>
-					</label>
-					<label class="check" data-when="frameMode=full,corners" data-i18n-title="cornerRelief.tip">
-						<input type="checkbox" data-param="cornerRelief" /><span data-i18n="cornerRelief"></span>
-					</label>
-				</section>
-
-				<section>
-					<h2 data-i18n="check"></h2>
-					<ul id="checks" class="checks"></ul>
-				</section>
+					<details class="advanced" data-group="frame.advanced" data-when="frameMode=full,corners">
+						<summary data-i18n="advanced"></summary>
+						<div class="field" data-i18n-title="clearance.tip">
+							<label data-i18n="clearance"></label>
+							<span class="num"><input type="number" data-param="clearance" min="0" max="1" step="0.05" /><i>mm</i></span>
+						</div>
+						<div class="field" data-i18n-title="frameDrop.tip">
+							<label data-i18n="frameDrop"></label>
+							<span class="num"><input type="number" data-param="frameDrop" min="0" max="2" step="0.1" /><i>mm</i></span>
+						</div>
+						<label class="check" data-when="frameMode=full">
+							<input type="checkbox" data-param="notches" /><span data-i18n="notches"></span>
+						</label>
+						<label class="check" data-i18n-title="cornerRelief.tip">
+							<input type="checkbox" data-param="cornerRelief" /><span data-i18n="cornerRelief"></span>
+						</label>
+					</details>
+				</details>
 			</div>
+
+			<section class="issues">
+				<h2 data-i18n="check"></h2>
+				<ul id="checks" class="checks"></ul>
+			</section>
 
 			<footer class="export">
 				<button id="export-stl" class="primary" type="button" data-i18n="export.stl" disabled></button>

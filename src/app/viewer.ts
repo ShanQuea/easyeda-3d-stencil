@@ -249,6 +249,13 @@ export class Viewer {
 		this.invalidate();
 	}
 
+	// 拉近到某个点，问题列表点击定位用
+	focus(position: [number, number, number]): void {
+		this.target = [...position];
+		this.distance = Math.max(8, this.radius * 0.35);
+		this.invalidate();
+	}
+
 	setAngles(yaw: number, pitch: number, zoom = 1): void {
 		this.yaw = yaw;
 		this.pitch = pitch;
